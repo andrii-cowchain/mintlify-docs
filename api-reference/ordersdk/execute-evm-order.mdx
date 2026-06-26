@@ -1,8 +1,3 @@
 ---
 openapi: post /sdk/order/execute/evm/{id}
-title: "Execute a Fully Signed EVM Multisig Order on-Chain"
-sidebarTitle: "Execute EVM Order"
-description: "POST /sdk/order/execute/evm/{id} — Broadcasts a fully signed EVM multisig order on-chain and returns the resulting transaction hash."
 ---
-
-Use this endpoint to execute an EVM order that has gathered all required signatures. Provide the order `id` as a path parameter; the API assembles the signed transaction and broadcasts it to the EVM-compatible chain, returning the resulting on-chain transaction hash.

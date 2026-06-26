@@ -1,8 +1,3 @@
 ---
 openapi: post /sdk/wallets/create
-title: "Create a New MPC Wallet for the Authenticated User"
-sidebarTitle: "Create Wallet"
-description: "POST /sdk/wallets/create - Creates a new MPC wallet for the authenticated user from chain type and key-share data, returning the new wallet address."
 ---
-
-Create a new wallet for the authenticated user. The request body must include the target chain type, an optional display name, and the cryptographic key-share material required to initialise the MPC wallet. On success the endpoint returns the newly created wallet address along with its associated metadata.

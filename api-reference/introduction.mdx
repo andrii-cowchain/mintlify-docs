@@ -1,68 +1,36 @@
 ---
-title: "Cowchain REST API Reference — All /sdk/* Endpoints"
-sidebarTitle: "Overview"
-description: "Complete REST API reference for the Trustodian SDK — base URLs for mainnet/testnet, x-api-key authentication, and all /sdk/* routes."
+title: 'Introduction'
+description: 'Getting started with the Trustodian SDK API'
 ---
 
-The Trustodian SDK REST API exposes every capability of the **vaults-multichain-sdk** as a set of authenticated HTTP endpoints. All routes are prefixed with `/sdk` and follow a consistent request/response pattern — making it straightforward to manage multisig wallets, assemble threshold-signature transactions, and query portfolio data across EVM, Solana, Bitcoin, Tron, Cardano, and XRP Ledger from any language or runtime. The API is the backbone that `TrustodianSDK` communicates with when you install the SDK package; you can also call these endpoints directly if you prefer raw HTTP.
+## Base URL
 
-## Base URLs
+All SDK routes use the `/sdk` path prefix. Set the host to match your deployment (or pass `apiBaseUrl` in `TrustodianSDK`).
 
-All SDK routes share a common `/sdk` path prefix. The table below shows the **default hosts used by `TrustodianSDK`** when you set `network` in the constructor. You can override either host by passing `apiBaseUrl` — useful for self-hosted deployments or local development proxies.
+| `network` (SDK config) | Default host |
+| ---------------------- | ------------ |
+| `mainnet` | `https://stage-api.trustodian.online` |
+| `testnet` | `https://afridax-backend-production.up.railway.app` |
 
-| `network` value | Default base URL |
-|-----------------|------------------|
-| `'mainnet'` | `https://stage-api.trustodian.online` |
-| `'testnet'` | `https://afridax-backend-production.up.railway.app` |
-
-A complete endpoint URL looks like:
-
-```
-https://stage-api.trustodian.online/sdk/wallets
-```
-
-<Note>
-  The testnet base URL above is the SDK default for sandbox testing. For production use, always set `network: 'mainnet'` or supply your own host via `apiBaseUrl`.
-</Note>
-
-You can override the host at SDK initialisation time by passing `apiBaseUrl` in the `TrustodianSDK` constructor — useful for self-hosted deployments or local development proxies.
+Example full URL: `https://stage-api.trustodian.online/sdk/wallets`
 
 ## Authentication
 
-Every `/sdk/*` endpoint requires an API key issued from the [Trustodian Dashboard](https://app.trustodian.com). Pass the key in the `x-api-key` request header on every call.
+SDK endpoints are authenticated with an API key in the `x-api-key` header.
 
-| Header | Value |
-|--------|-------|
-| `x-api-key` | Your API key from the Trustodian Dashboard |
+| Header      | Description                                                                       |
+| ----------- | --------------------------------------------------------------------------------- |
+| `x-api-key` | Your API key obtained from the [Trustodian Dashboard](https://app.trustodian.com) |
 
-<Note>
-  API keys are shown in full **only once** at creation time. Store yours securely — if lost, generate a new key from the Dashboard.
-</Note>
+## Non-custodial endpoints
 
-You can scope keys with per-method permissions (e.g. `view_balances` only), restrict them to an IP whitelist, and toggle them on or off — all without revoking the key permanently. Manage your API keys from the [Trustodian Dashboard](https://app.trustodian.com).
+Most `/sdk/*` routes are **read-only** (wallets list, portfolio, orders) and need only `x-api-key`.
 
-## Non-Custodial Endpoints
+Routes that return **encrypted key shares** (`/sdk/wallets/share/c/...`, `/sdk/wallets/share/s/...`) or accept **wallet-password proofs** (`/sdk/users/enc-token`, `/sdk/oprf/evaluate`) are part of the non-custodial signing flow. **Use [TrustodianSDK](https://www.npmjs.com/package/vaults-multichain-sdk)** on your backend — it handles share decryption and signing. See the [SDK Guide](/sdk-guide/key-management).
 
-<Info>
-  The Trustodian SDK is **non-custodial** — private key material never leaves your infrastructure in plain text. The server holds only an encrypted share.
-</Info>
+Organization routes live under `/sdk/organization/...` (team, wallets, vaults, orders). Start with [Invite member](/api-reference/organizationsdk/post-organization-team-invite) or the [SDK Guide — Organization](/sdk-guide/organization).
 
-Most `/sdk/*` routes are **read-only** — listing wallets, fetching portfolio balances, querying order history — and require only the `x-api-key` header.
-
-A small subset of routes participates in the **non-custodial signing flow** and should be called through the `TrustodianSDK` package rather than raw HTTP:
-
-| Route pattern | Purpose |
-|---------------|---------|
-| `GET /sdk/wallets/share/c/…` | Retrieve the encrypted **client** key share |
-| `GET /sdk/wallets/share/s/…` | Retrieve the encrypted **server** key share |
-| `POST /sdk/users/enc-token` | Exchange credentials for an encryption token |
-| `POST /sdk/oprf/evaluate` | OPRF evaluation step in the key-hardening protocol |
-
-The SDK handles share decryption, OPRF blinding/unblinding, and threshold-signature assembly transparently. See the [Key Management guide](/sdk-guide/key-management) for the full protocol walkthrough.
-
-Organization-scoped routes live under `/sdk/organization/…` (team management, wallet assignments, vaults, orders). Start with [Invite Member](/api-reference/organizationsdk/post-organization-team-invite) or the [Organization guide](/sdk-guide/organization).
-
-## Code Examples
+## Examples
 
 <CodeGroup>
 
@@ -70,7 +38,7 @@ Organization-scoped routes live under `/sdk/organization/…` (team management, 
 fetch('https://stage-api.trustodian.online/sdk/wallets', {
   method: 'GET',
   headers: {
-    'x-api-key': 'YOUR_API_KEY',
+    'x-api-key': 'your-api-key',
     'Content-Type': 'application/json',
   },
 })
@@ -80,7 +48,7 @@ fetch('https://stage-api.trustodian.online/sdk/wallets', {
 
 ```bash cURL
 curl -X GET "https://stage-api.trustodian.online/sdk/wallets" \
-  -H "x-api-key: YOUR_API_KEY" \
+  -H "x-api-key: your-api-key" \
   -H "Content-Type: application/json"
 ```
 
@@ -88,8 +56,8 @@ curl -X GET "https://stage-api.trustodian.online/sdk/wallets" \
 import requests
 
 headers = {
-    "x-api-key": "YOUR_API_KEY",
-    "Content-Type": "application/json",
+    "x-api-key": "your-api-key",
+    "Content-Type": "application/json"
 }
 
 response = requests.get(
@@ -97,69 +65,40 @@ response = requests.get(
     headers=headers,
 )
 data = response.json()
-print(data)
 ```
 
 </CodeGroup>
 
 ## Supported Chains
 
-The Trustodian SDK API supports threshold multisig across six blockchain ecosystems.
+Trustodian SDK supports multiple blockchain networks:
 
 <CardGroup cols={2}>
   <Card title="EVM Chains" icon="ethereum">
-    Ethereum, BNB Smart Chain, Polygon, Avalanche, and any EVM-compatible
-    network. Uses **GnosisSafe** multisig under the hood.
+    Ethereum, BSC, Polygon, Avalanche and more
   </Card>
   <Card title="Solana" icon="sun">
-    Full Solana mainnet and devnet support via the **Squads** multisig program.
-    Supports SOL and SPL token transfers.
+    Full Solana mainnet and devnet support
   </Card>
   <Card title="Bitcoin" icon="bitcoin">
-    Native Bitcoin P2WSH multisig. Orders return a **PSBT** for incremental
-    owner signing before broadcast.
+    Native Bitcoin network integration
   </Card>
   <Card title="Tron" icon="bolt">
-    TRX and TRC-20 token transfers through Tron's native multisig permission
-    layer.
+    TRC-20 and native TRX support
   </Card>
   <Card title="Cardano" icon="eye">
-    ADA and native asset transfers using Cardano **native script** multisig.
-    Follows the EUTXO model — signatures are `VkeyWitness` objects collected
-    off-chain.
+    Native ADA and USDM support. Uses EUTXO model with native scripts.
   </Card>
-  <Card title="XRP Ledger" icon="x">
-    XRP native multisig via **SignerList**. Supports sequential transaction
-    execution with account sequence management.
+  <Card title="XRP" icon="x">
+    XRP Ledger native multisig. Supports SignerList and sequential transaction execution.
   </Card>
 </CardGroup>
 
-## Core Workflow
-
-Every chain follows the same five-step lifecycle. The specific endpoint names differ per chain, but the pattern is identical.
+## Core Features
 
 <Steps>
-  <Step title="Authenticate">
-    Obtain an API key from the [Trustodian Dashboard](https://app.trustodian.com)
-    and include it as `x-api-key` on every request.
-  </Step>
-  <Step title="Create or Fetch a Wallet">
-    Call `GET /sdk/wallets` to list existing multisig wallets, or use the
-    wallet-creation endpoints to deploy a new one on your target chain.
-  </Step>
-  <Step title="Create an Order">
-    Submit a transaction intent via the chain-specific `POST /sdk/order/create/{chain}`
-    endpoint. The API returns the unsigned transaction data (PSBT for Bitcoin,
-    tx body hash for Cardano, Squads params for Solana, etc.).
-  </Step>
-  <Step title="Collect Threshold Signatures">
-    Each authorised wallet owner calls `POST /sdk/order/sign/{chain}` with
-    their partial signature. When the configured threshold is reached, the
-    order status advances to **ready**.
-  </Step>
-  <Step title="Execute the Transaction">
-    Call `POST /sdk/order/execute/{chain}/{id}` to broadcast the fully signed
-    transaction to the blockchain. The order status transitions from **ready** →
-    **execution** → **executed** once confirmed on-chain.
-  </Step>
+  <Step title="Create Wallets">Create and manage wallets</Step>
+  <Step title="Set Up Multisig">Deploy multisig wallets across supported chains</Step>
+  <Step title="Create Orders">Create transaction orders for approval workflows</Step>
+  <Step title="Execute Transactions">Sign and execute transactions with threshold signatures</Step>
 </Steps>

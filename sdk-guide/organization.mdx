@@ -1,55 +1,50 @@
 ---
-title: "B2B Organization Wallets, Vaults, and Spending Policies"
-sidebarTitle: "Organization"
-description: "Manage organization team wallets, multisig vaults, spending limit policies, and compliance audit logs under a single Cowchain API key."
+title: 'Organization'
+description: 'B2B organization wallets, vaults, and policies'
+icon: 'building'
 ---
 
-Organization features in Cowchain let you manage **team wallets**, **multisig vaults**, spending policies, and audit logs across your entire company under a single API key. The SDK resolves your organization context automatically from that key — you never pass an `orgId` manually to any method. All organization HTTP routes are served under `/sdk/organization/...`, while personal wallet, multisig, and order routes accept an optional `walletScope` field to operate against organization-owned assets.
+## Overview
+
+Organization features let integrators manage **team wallets**, **multisig vaults**, spending limits, and policies under a single API key. The org context is resolved from the API key — no `orgId` parameter in SDK methods.
+
+All org HTTP routes live under `/sdk/organization/...`.
 
 ## Wallet Scope
 
-Many personal methods accept an optional `walletScope` parameter that controls which set of shares and API routes the SDK uses:
+Many personal methods accept optional `walletScope`:
 
 ```typescript
 type WalletScope = 'personal' | 'organization';
 ```
 
-| Scope | Share paths | Use case |
-| ----- | ----------- | -------- |
-| `personal` (default) | `/sdk/wallets/...` | The calling user's own wallets |
-| `organization` | `/sdk/organization/wallets/...` | Wallets owned and assigned by the org |
+| Scope | Share paths | Use |
+| ----- | ----------- | --- |
+| `personal` (default) | `/sdk/wallets/...` | User's own wallets |
+| `organization` | `/sdk/organization/wallets/...` | Org-assigned wallets |
 
-`walletScope` applies to `sendTransaction`, `exportWallet`, `createMultisig`, `activateMultisig`, `createOrder`, `signOrder`, `executeOrder`, and related methods. The SDK also **auto-falls back** from a personal share path to an org share path on a `404` or `403` response, so mixed environments degrade gracefully.
+Applies to `sendTransaction`, `exportWallet`, `createMultisig`, `activateMultisig`, `createOrder`, `signOrder`, `executeOrder`, etc.
+
+The SDK also **auto-falls back** from personal to org share paths on 404/403 when fetching shares.
 
 ## Membership Probe
-
-Before performing any organization operation, confirm the caller's membership status:
 
 ```typescript
 const { organizationName, orgMemberStatus } = await sdk.getOrgMe();
 ```
 
-Use the `EOrgMemberRole` and `EOrgMemberStatus` enums exported from `vaults-multichain-sdk` to perform role-based checks in your business logic without hardcoding string literals.
+Use `EOrgMemberRole` / `EOrgMemberStatus` enums from the package for role checks.
 
 ## Organization Wallets
 
-### Listing wallets
-
-A **master** API key can see every wallet in the organization; a **member** key sees only the wallets assigned to it:
-
 ```typescript
-// Master: every org wallet
+// Master: all org wallets
 const { wallets } = await sdk.listOrgWallets();
 
-// Caller: only wallets assigned to this API key's user
+// Caller: wallets assigned to this API key user
 const { wallets: mine } = await sdk.listMyOrgWallets();
-```
 
-### Creating and renaming
-
-Creating an org wallet requires an unlocked wallet session first:
-
-```typescript
+// Create (Master) — requires unlocked session
 const userRef = await sdk.getSdkUserId();
 await sdk.unlockWalletSession(userRef, password);
 
@@ -65,24 +60,13 @@ await sdk.renameOrgWallet({
   address: wallets[0].address,
   name: 'Payroll',
 });
-```
 
-### Portfolio
-
-Retrieve the aggregated USD value or per-wallet breakdown for all org wallets:
-
-```typescript
+// Portfolio
 const total = await sdk.getOrgTotalAssetValue();
-const portfolios = await sdk.getOrgWalletsPortfolio([/* array of wallet refs */]);
-```
+const portfolios = await sdk.getOrgWalletsPortfolio([...]);
 
-### Sending from an org wallet
-
-Pass `walletScope: 'organization'` to route the transaction through org share paths:
-
-```typescript
+// Send from org wallet
 const userRef = await sdk.getSdkUserId();
-
 await sdk.sendTransaction({
   walletScope: 'organization',
   chain: EChainType.EVM,
@@ -97,81 +81,69 @@ await sdk.sendTransaction({
 });
 ```
 
-## Assign → Provision → Accept Flow
+### Assign & provision flow
 
-Granting an employee access to an org wallet is a **three-step cryptographic handshake**. An `assignOrgWallet` call alone creates only a permission record on the server — the employee cannot sign anything until the master provisions encrypted shares and the employee accepts them.
+Granting an employee access to an org wallet is a **three-step** process. **Assign** alone does not transfer keys — only a permission record on the server.
 
-| Step | Actor | What happens |
-| ---- | ----- | ------------ |
-| 1. **Assign** | Master | Links `memberId` ↔ `walletId`. No cryptographic access is granted yet. |
-| 2. **Provision** | Master | The SDK splits the key locally and uploads **AES-GCM encrypted** server + recovery shares. A one-time `tempPassword` is returned for the employee. |
-| 3. **Accept** | Employee | The SDK decrypts provisioned shares with `tempPassword`, re-encrypts them with the employee's own wallet password, uploads the new ciphertext, and persists the **device share (S0)** to your `shareStore`. |
+| Step | Who | What happens |
+| ---- | --- | ------------ |
+| 1. **Assign** | Master | Links `memberId` ↔ `walletId`. No cryptographic access yet. |
+| 2. **Provision** | Master | SDK splits the key locally and uploads **encrypted** server + recovery shares (AES-GCM). A one-time `tempPassword` is returned for the employee. |
+| 3. **Accept** | Employee | SDK decrypts provisioned shares with `tempPassword`, re-encrypts with the employee's wallet password, uploads new ciphertext, and saves the **device share (S0)** to `shareStore`. |
 
-<Note>
-  The complete private key never leaves the SDK process or travels to Trustodian in plaintext. Only encrypted Shamir shares are transmitted over HTTPS. The master never learns the employee's wallet password; the employee never learns the master's.
-</Note>
-
-<Steps>
-  <Step title="Assign — grant permission">
-    The master links the employee to the wallet. No key material is transferred yet.
-
-    ```typescript
-    await sdk.assignOrgWallet({ memberId, walletId });
-    ```
-  </Step>
-
-  <Step title="Provision — encrypt and upload shares">
-    The master's SDK splits the wallet key locally and uploads encrypted shares for the employee. Store the returned `tempPassword` and deliver it to the employee through a secure out-of-band channel (e.g. a one-time link, never plaintext email).
-
-    ```typescript
-    const masterUserRef = await sdk.getSdkUserId();
-
-    const { tempPassword } = await sdk.provisionOrgMemberWalletAccess(masterUserRef, {
-      memberId,
-      walletId,
-      address,
-      chainType: EChainType.EVM,
-      masterPassword,
-    });
-    ```
-  </Step>
-
-  <Step title="Accept — employee claims their device share">
-    The employee's SDK decrypts the provisioned shares using the `tempPassword`, re-encrypts them with their own wallet password, and saves the device share (S0) to your `shareStore`. After this step the employee can sign transactions independently.
-
-    ```typescript
-    const employeeUserRef = await sdk.getSdkUserId();
-
-    await sdk.acceptOrgWalletAccessWithPassword(employeeUserRef, {
-      walletId,
-      address,
-      chainType: EChainType.EVM,
-      memberId,
-      tempPassword,
-      ownPassword: employeeWalletPassword,
-    });
-    // Device share (S0) is persisted to shareStore automatically
-    ```
-  </Step>
-</Steps>
-
-## Revoking Access
+<Info>
+  **Security:** A complete private key never leaves the SDK process or travels to Trustodian in plaintext. Only encrypted Shamir shares are sent over HTTPS. The master never learns the employee's wallet password; the employee never learns the master's.
+</Info>
 
 <Warning>
-  **Revocation is immediate and irreversible.** `unassignOrgWallet` deletes the employee's server and recovery shares for that wallet the moment the call completes — they lose signing access instantly. `removeOrgMember` goes further: it removes all wallet assignments, deletes every org-wallet share for that employee, invalidates any pending multisig signatures, and terminates all active sessions. The master's own wallet shares are never affected.
+  **Revocation is immediate.** `unassignOrgWallet` deletes the employee's server and recovery shares for that wallet right away — they lose signing access instantly. `removeOrgMember` removes all assignments, deletes all org-wallet shares for that employee, invalidates multisig signatures, and terminates their sessions. The master's own wallet shares are never deleted.
 </Warning>
 
 ```typescript
-// Remove access to a single wallet
-await sdk.unassignOrgWallet({ memberId, walletId });
+const masterUserRef = await sdk.getSdkUserId();
 
-// Remove the employee entirely (all shares and sessions deleted)
-await sdk.removeOrgMember({ memberId });
+// 1. Assign (permission only)
+await sdk.assignOrgWallet({ memberId, walletId });
+
+// 2. Provision (encrypted shares → server)
+const { tempPassword } = await sdk.provisionOrgMemberWalletAccess(masterUserRef, {
+  memberId,
+  walletId,
+  address,
+  chainType: EChainType.EVM,
+  masterPassword,
+});
+
+// 3. Accept — employee side (their API key / userRef)
+const employeeUserRef = await sdk.getSdkUserId();
+
+await sdk.acceptOrgWalletAccessWithPassword(employeeUserRef, {
+  walletId,
+  address,
+  chainType: EChainType.EVM,
+  memberId,
+  tempPassword,
+  ownPassword: employeeWalletPassword,
+});
+// Device share (S0) persisted to shareStore automatically
 ```
+
+To revoke access:
+
+```typescript
+await sdk.unassignOrgWallet({ memberId, walletId }); // one wallet
+await sdk.removeOrgMember({ memberId });             // entire employee
+```
+
+See the SDK repo `docs/frontend-org-wallets-vaults-limit-group.md` for full flows.
+
+<Card title="API Reference" icon="code" href="/api-reference/organizationsdk/post-organization-team-invite">
+  Team invite, assign wallet, provision, and accept endpoints
+</Card>
 
 ## Organization Vaults (Multisig)
 
-Create org-owned multisig vaults by passing `walletScope: 'organization'` to the standard multisig methods. The vault is then listed under org routes rather than personal ones.
+Create org-owned vaults with `walletScope: 'organization'`:
 
 ```typescript
 const userRef = await sdk.getSdkUserId();
@@ -179,7 +151,7 @@ await sdk.unlockWalletSession(userRef, password);
 
 const vault = await sdk.createMultisig({
   chain: EChainType.EVM,
-  owners: ['0xOwner1...', '0xOwner2...', '0xOwner3...'],
+  owners: ['0x...', '0x...', '0x...'],
   threshold: 2,
   chainIds: ['1'],
   walletScope: 'organization',
@@ -197,13 +169,10 @@ await sdk.activateMultisig({
 });
 ```
 
-### Listing org vaults
+List vaults:
 
 ```typescript
-// Master: all org vaults
-const { vaults } = await sdk.listOrgVaults();
-
-// Caller: only vaults accessible to this member
+const { vaults } = await sdk.listOrgVaults();       // Master
 const { vaults: myVaults } = await sdk.listMyOrgVaults();
 
 // Detail by address (v1.6.2+)
@@ -213,76 +182,38 @@ const detail = await sdk.getOrgVaultById({
 });
 ```
 
-<Info>
-  Org vault orders use the same `createOrder`, `signOrder`, and `executeOrder` methods as personal vaults — just include `walletScope: 'organization'` in every call.
-</Info>
+Org orders use the same `createOrder` / `signOrder` / `executeOrder` methods with `walletScope: 'organization'`.
 
 ## Policies & Limits
 
-Retrieve and update the spending controls attached to your organization:
-
 ```typescript
-// Limit group configuration (e.g. per-transaction caps)
 const { limitGroup } = await sdk.getOrgLimitGroup();
-
-// Daily USD spending limit and current consumption
-const spending = await sdk.getOrgSpendingLimit();
-
-// Full policy set
+const spending = await sdk.getOrgSpendingLimit(); // daily USD limit status
 const policies = await sdk.getOrgPolicies();
-
-// Update policies
-await sdk.updateOrgPolicies({ /* policy fields */ });
+await sdk.updateOrgPolicies({ ... });
 ```
 
 ## Team & Address Book
 
-Invite members, manage wallet assignments, and maintain a shared address book for your organization:
-
 ```typescript
-// List all team members
 const team = await sdk.getOrgTeam();
-
-// Invite a new member by email
 await sdk.inviteOrgMember({ email: 'teammate@example.com' });
-
-// After the employee joins, run the assign → provision → accept flow
+// After employee joins: assign → provision → accept (see above)
 await sdk.assignOrgWallet({ memberId, walletId });
+await sdk.unassignOrgWallet({ memberId, walletId }); // shares deleted immediately
+await sdk.removeOrgMember({ memberId });             // all employee shares removed
 
-// Address book
 const addresses = await sdk.listOrgAddresses();
-await sdk.addOrgAddress({ /* address fields */ });
+await sdk.addOrgAddress({ ... });
 ```
 
 ## Audit Logs
 
-Retrieve paginated audit events or export a date-range CSV for compliance reporting:
-
 ```typescript
-// Paginated log fetch
 const logs = await sdk.getOrgAuditLogs({ page: 1, limit: 50 });
-
-// Export as a streaming CSV
 const csvStream = await sdk.exportOrgAuditLogs({ dateFrom, dateTo });
 ```
 
-<Tip>
-  Export audit logs on a scheduled basis (e.g. nightly cron) and store them in your own data warehouse. This gives you an immutable compliance record that is independent of the Trustodian platform.
-</Tip>
-
 ## API Reference
 
-<CardGroup cols={2}>
-  <Card title="Team & Invitations" icon="users" href="/api-reference/organizationsdk/post-organization-team-invite">
-    Invite members, list team, assign wallets, and manage org addresses
-  </Card>
-  <Card title="Provision & Accept" icon="key" href="/api-reference/organizationsdk/post-organization-team-invite">
-    Encrypted share provisioning, one-time password delivery, and employee acceptance
-  </Card>
-  <Card title="Vaults & Orders" icon="vault" href="/api-reference/organizationsdk/post-organization-team-invite">
-    Org multisig creation, activation, listing, and order lifecycle
-  </Card>
-  <Card title="Policies & Audit" icon="shield-check" href="/api-reference/organizationsdk/post-organization-team-invite">
-    Spending limits, limit groups, policy management, and audit log export
-  </Card>
-</CardGroup>
+Organization HTTP routes live under `/sdk/organization/...`. Personal wallet, multisig, and order routes use `/sdk/wallets`, `/sdk/multisig`, and `/sdk/order` with optional `walletScope: 'organization'` in the SDK.

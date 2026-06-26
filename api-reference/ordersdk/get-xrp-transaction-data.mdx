@@ -1,8 +1,3 @@
 ---
 openapi: get /sdk/order/{id}/tx-xrp
-title: "Get Raw XRP Ledger Transaction Data for a Pending Order"
-sidebarTitle: "XRP TX Data"
-description: "GET /sdk/order/{id}/tx-xrp — Retrieves the raw XRP Ledger transaction data for the specified order ID, ready for signing or broadcast."
 ---
-
-Use this endpoint to retrieve the raw XRP Ledger transaction data for a specific order. Provide the order `id` as a path parameter and the API returns the serialized transaction payload that each multisig signer needs to review and sign before the order can be submitted to the XRP Ledger.

@@ -1,8 +1,3 @@
 ---
 openapi: get /sdk/order/params/sol/{id}
-title: "Get Solana Transaction Parameters for an Order by ID"
-sidebarTitle: "Solana Order Params"
-description: "GET /sdk/order/params/sol/{id} — Retrieves the Solana-specific transaction parameters for an order by its ID, including blockhash and instruction data."
 ---
-
-Use this endpoint to fetch the Solana transaction parameters associated with a specific order. Provide the order `id` as a path parameter and the API returns the chain-specific details needed to construct or verify the Solana transaction, such as the recent blockhash and encoded instructions.

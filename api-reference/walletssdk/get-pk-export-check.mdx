@@ -1,8 +1,3 @@
 ---
 openapi: get /sdk/wallets/pk-export/check
-title: "Verify Whether a Wallet Is Eligible for Key Export"
-sidebarTitle: "PK Export Check"
-description: "GET /sdk/wallets/pk-export/check - Checks whether the authenticated user's wallet meets all prerequisites for private key export and lists any blockers."
 ---
-
-Verify whether a wallet's private key is eligible for export before initiating the export flow. The endpoint performs prerequisite checks (such as MFA status and wallet state) and returns a boolean eligibility flag along with a list of any conditions that must be resolved before export can proceed.

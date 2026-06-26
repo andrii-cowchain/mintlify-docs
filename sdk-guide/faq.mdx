@@ -1,158 +1,84 @@
 ---
-title: "Cowchain SDK FAQ: Setup, Keys, Wallets, and Organizations"
-sidebarTitle: "FAQ"
-description: "Answers to common questions about integrating the Cowchain SDK — covering setup, key management, wallets, organization flows, and multisig vaults."
----
-
-If you're new to Cowchain, start with the [Introduction](/sdk-guide/introduction) and [Authentication](/sdk-guide/authentication) guides. The questions below cover the most common points of confusion reported by integrators across setup, cryptography, wallet operations, organization management, and multisig orders.
-
+title: 'FAQ'
+description: 'Frequently asked questions about vaults-multichain-sdk'
+icon: 'circle-question'
 ---
 
 ## General
 
 <AccordionGroup>
-  <Accordion title="What is the npm package name and main export?">
-    The package is **`vaults-multichain-sdk`** on npm. The primary class you instantiate is **`TrustodianSDK`**. A minimal import looks like this:
+  <Accordion title="What is the package name?">
+    **`vaults-multichain-sdk`** on npm. Main export: **`TrustodianSDK`**. Default import:
 
     ```typescript
-    import {
-      TrustodianSDK,
-      EChainType,
-      InMemoryShareStore,
-    } from 'vaults-multichain-sdk';
+    import { TrustodianSDK, EChainType, InMemoryShareStore } from 'vaults-multichain-sdk';
     ```
-
-    `EChainType` is the enum you pass to every chain-specific call. `InMemoryShareStore` is a built-in implementation of the `shareStore` interface suitable for testing — replace it with a persistent implementation (database, encrypted file) in production.
   </Accordion>
 
-  <Accordion title="Which blockchains does the SDK support?">
-    The SDK currently supports:
-
-    - **EVM-compatible chains** — Ethereum, Base, Arbitrum, Optimism, Polygon, BNB Chain, Avalanche, and their testnets
-    - **Solana**
-    - **Tron**
-    - **Bitcoin** (`BTC` mainnet and `BTC_T3` testnet)
-    - **Cardano**
-    - **XRP**
-
-    Pass the appropriate `EChainType` enum value to any method that takes a `chain` or `chainType` parameter. New chains are added via SDK updates — check the changelog before upgrading.
+  <Accordion title="What chains does the SDK support?">
+    **EVM** (Ethereum, Base, Arbitrum, Optimism, Polygon, BNB, Avalanche + testnets), **Solana**,
+    **Tron**, **Bitcoin** (`BTC` / `BTC_T3`), **Cardano**, and **XRP**.
   </Accordion>
 
-  <Accordion title="Why should I use the SDK instead of calling the REST API directly?">
-    The Cowchain REST API (`/sdk/*` endpoints) requires a non-trivial cryptographic layer that sits **between** your application and the server:
-
-    - **OPRF** (Oblivious Pseudo-Random Function) for wallet password hardening
-    - Encrypted share **decryption** (AES-GCM) using the OPRF output
-    - **Shamir secret reconstruction** to assemble the private key in memory
-    - Chain-specific **transaction signing** for EVM, Solana, Bitcoin, and others
-
-    If you call the API directly you must implement all of this yourself, and any mistake exposes key material. The SDK handles all cryptographic operations for you and zeroizes the key after use. **Use the SDK.**
+  <Accordion title="SDK vs raw REST API?">
+    The SDK wraps `/sdk/*` endpoints and adds OPRF, encrypted share decryption, Shamir
+    reconstruction, and chain-specific signing. Raw HTTP is possible but you must implement all
+    crypto yourself. **Use the SDK.**
   </Accordion>
 
   <Accordion title="Can I run the SDK in the browser?">
-    The SDK can be bundled for the browser with a `buffer` polyfill, but **this is strongly discouraged**. Running it in the browser means:
-
-    - Your **API key** is visible to any user who inspects network requests or the JavaScript bundle
-    - Your users' **wallet passwords** may be captured by browser extensions or XSS attacks
-    - The device share (S0) stored in `localStorage` or `sessionStorage` is accessible to any script on the page
-
-    Run the SDK exclusively on your **server-side backend** and expose only the business actions your frontend needs through your own authenticated API.
+    Possible with a `buffer` shim, but **not recommended**. Run on your backend; never expose API
+    keys or wallet passwords to clients.
   </Accordion>
 </AccordionGroup>
-
----
 
 ## Keys & Security
 
 <AccordionGroup>
-  <Accordion title="How does key management work in SDK v2?">
-    Key management in v2 follows a five-step flow on every signing operation:
+  <Accordion title="How does key management work in v2?">
+    1. Integrator implements **`shareStore`** (device share S0)
+    2. User sets a **wallet password** (`setWalletPassword` / `unlockWalletSession`)
+    3. SDK fetches **encrypted** server/recovery shares from API
+    4. SDK decrypts and reconstructs key in memory for signing
+    5. Key is zeroized after use
 
-    1. **Your `shareStore`** holds the device share (S0) for the current user, persisted between sessions by your implementation.
-    2. The user provides a **wallet password** via `setWalletPassword` (first time) or `unlockWalletSession` (subsequent sessions).
-    3. The SDK fetches the **encrypted** server share and recovery share from the Trustodian API.
-    4. The SDK runs the OPRF protocol, decrypts the shares, and **reconstructs the private key in memory** using Shamir's Secret Sharing.
-    5. The key is used to sign the transaction or operation, then **zeroized** immediately afterward.
-
-    See the [Key Management](/sdk-guide/key-management) guide for a deeper walkthrough.
+    See [Key Management](/sdk-guide/key-management).
   </Accordion>
 
-  <Accordion title="What is userRef and where does it come from?">
-    `userRef` is the Trustodian user ID associated with your API key. Retrieve it at the start of any session:
-
-    ```typescript
-    const userRef = await sdk.getSdkUserId();
-    ```
-
-    It is used to key entries in your `shareStore`, to scope wallet-password sessions, and as an input to all cryptographic calls. Always fetch it fresh rather than hardcoding it — the value is tied to your API key and environment.
+  <Accordion title="What is userRef?">
+    The Trustodian user id for your API key — from `await sdk.getSdkUserId()`. It keys `shareStore`
+    entries, wallet-password sessions, and crypto calls.
   </Accordion>
 
-  <Accordion title="What is the wallet password and how should I handle it?">
-    The wallet password is a user-chosen secret that is used (via OPRF) to derive the encryption key for the server and recovery shares. It is **never sent to Trustodian in plaintext**.
-
-    - **Set it once** with `setWalletPassword` when onboarding a user.
-    - **Unlock each session** with `unlockWalletSession` before performing any signing or wallet-creation operation.
-    - **Required before** `createWallet`, `sendTransaction`, `signOrder`, or any other key operation.
-
-    ```typescript
-    await sdk.setWalletPassword(userRef, newPassword);      // first time
-    await sdk.unlockWalletSession(userRef, existingPassword); // each session
-    ```
-
-    <Warning>
-      Never log the wallet password, pass it to a client application, or store it in plaintext. Treat it with the same care as a database master password.
-    </Warning>
+  <Accordion title="What is the wallet password?">
+    A user-chosen secret that encrypts server/recovery shares. Set once with `setWalletPassword`,
+    then pass on each session via `unlockWalletSession`. Required before `createWallet`, `sendTransaction`,
+    `signOrder`, or any key operation. Never send it to client apps or log it.
   </Accordion>
 
-  <Accordion title="What are client environments and why do web vs SDK wallets differ?">
-    Trustodian stores encrypted shares separately per client environment: `web`, `mobile`, `extension`, and `sdk`. The Node SDK always operates in the **`sdk`** environment.
-
-    This means:
-
-    - A wallet created through the Trustodian **web dashboard** (environment: `web`) and a wallet created through the **SDK** (environment: `sdk`) are **independent** — each needs its own password setup, its own device share, and its own `shareStore` entry.
-    - You cannot use a web-dashboard wallet password to unlock an SDK wallet or vice versa.
-
-    If you are migrating existing users from the dashboard to your SDK integration, you need to guide them through a re-provisioning flow in the SDK environment.
+  <Accordion title="What are client environments (web vs sdk)?">
+    Trustodian stores encrypted shares separately per environment (`web`, `mobile`, `extension`, `sdk`).
+  The Node SDK always uses **`sdk`**. Your `shareStore` holds the device share for that environment only.
+  Dashboard wallets and SDK wallets for the same account are independent — each needs its own password
+  setup and device share.
   </Accordion>
 
   <Accordion title="Can Trustodian access my users' funds?">
-    **No.** The Trustodian platform holds at most one encrypted share per wallet. Spending requires:
-
-    1. The **wallet password** (known only to the user, never sent to Trustodian in plaintext)
-    2. The **device share (S0)** stored in your `shareStore` (under your control)
-
-    Without both, reconstruction fails. Even a full Trustodian database breach would not expose spendable keys — the attacker would still need the user's wallet password and your device share.
+    **No.** Trustodian holds at most one encrypted share. Spending requires the wallet password +
+    device share (under your control) or recovery path.
   </Accordion>
 
-  <Accordion title="What is KeyMismatchError and how do I fix it?">
-    A `KeyMismatchError` means the device share (S0) in your `shareStore` is **stale** — it was generated for an older version of the server share, so reconstruction fails.
-
-    **Fix:** pass the `walletPassword` on the failing crypto call to trigger **automatic recovery** inline, or call the dedicated recovery methods:
-
-    ```typescript
-    // Recover a single wallet
-    await sdk.recoverWallet({ userRef, walletAddress, chainType, walletPassword });
-
-    // Recover all wallets in one call
-    await sdk.recoverWalletsBatch({ userRef, walletPassword });
-    ```
-
-    This fetches a fresh server share, re-derives S0, updates your `shareStore`, and allows normal operation to resume.
+  <Accordion title="What is KeyMismatchError?">
+    Device share version is stale. Pass `walletPassword` on the crypto call for automatic recovery,
+    or call `recoverWallet` / `recoverWalletsBatch`.
   </Accordion>
 </AccordionGroup>
-
----
 
 ## Wallets
 
 <AccordionGroup>
-  <Accordion title="Can I import an existing wallet private key?">
-    Yes. Use `importWallet` and pass the raw private key. The SDK splits it locally using Shamir's Secret Sharing — **the key is never sent to the server in full**:
-
+  <Accordion title="Can I import an existing wallet?">
     ```typescript
-    const userRef = await sdk.getSdkUserId();
-    await sdk.unlockWalletSession(userRef, password);
-
     await sdk.importWallet({
       chain: EChainType.EVM,
       privateKey: '0x...',
@@ -160,120 +86,46 @@ If you're new to Cowchain, start with the [Introduction](/sdk-guide/introduction
       password,
     });
     ```
-
-    After import the wallet is managed identically to a generated one: the device share lives in your `shareStore`, and spending requires the wallet password.
+    The key is split locally — **not** sent to the server.
   </Accordion>
 
-  <Accordion title="What is the difference between the generate and ecdh wallet creation modes?">
-    When you call `createWallet`, the SDK picks a creation mode based on your app's configuration:
+  <Accordion title="createWallet modes: generate vs ecdh?">
+    - **`generate`** — local keygen (default when `genWalletFromMnemonic` is false)
+    - **`ecdh`** — backend derives from Vault mnemonic, delivers via ECDH (when flag is true)
 
-    - **`generate`** — The private key is generated entirely **locally** within the SDK process. This is the default when `genWalletFromMnemonic` is `false` in your app config.
-    - **`ecdh`** — The backend derives the key from the Vault's master mnemonic and delivers it to the SDK via an **ECDH key-exchange** (so the server's derived key is encrypted in transit). This is used when `genWalletFromMnemonic` is `true`.
-
-    Check which mode your deployment uses:
-
-    ```typescript
-    const config = await sdk.getAppConfig();
-    console.log(config.genWalletFromMnemonic); // true → ecdh, false → generate
-    ```
-
-    For most integrations the distinction is transparent — use `createWallet` and let the SDK select the right mode automatically.
+    Check `await sdk.getAppConfig()`.
   </Accordion>
 
-  <Accordion title="Why do deleteWallet and updateWalletName require both chain and address?">
-    On the Trustodian API, wallets are keyed by the composite `(chainType, address)` pair — the same address can exist on multiple chains (e.g. the same hex address on Ethereum and Polygon are treated as distinct wallets). Always pass both fields:
-
-    ```typescript
-    await sdk.deleteWallet({
-      chainType: EChainType.EVM,
-      address: '0x...',
-    });
-
-    await sdk.updateWalletName({
-      chainType: EChainType.EVM,
-      address: '0x...',
-      name: 'New Name',
-    });
-    ```
+  <Accordion title="Why do delete/rename need chain + address?">
+    Wallets are keyed by `(chainType, address)` on the API. Always pass both to `deleteWallet` and
+    `updateWalletName`.
   </Accordion>
 </AccordionGroup>
-
----
 
 ## Organization
 
 <AccordionGroup>
-  <Accordion title="How do organization wallets work at a high level?">
-    Your API key resolves to an organization context automatically — no `orgId` parameter is needed. The main differences from personal wallets are:
-
-    - Use `listOrgWallets` / `createOrgWallet` instead of `listWallets` / `createWallet`
-    - Pass `walletScope: 'organization'` to `sendTransaction`, `signOrder`, and related methods
-    - Shares are stored under `/sdk/organization/wallets/...` paths rather than `/sdk/wallets/...`
-
-    See the [Organization](/sdk-guide/organization) guide for the full reference.
+  <Accordion title="How do org wallets work?">
+    API key resolves to an organization context. Use org list/create methods (`listOrgWallets`, etc.)
+    and pass `walletScope: 'organization'` on send/sign/order methods. See
+    [Organization](/sdk-guide/organization).
   </Accordion>
 
-  <Accordion title="How does an employee get access to an org wallet?">
-    Access is granted through a three-step cryptographic handshake:
-
-    1. **Master calls `assignOrgWallet`** — creates the permission record (no key access yet)
-    2. **Master calls `provisionOrgMemberWalletAccess`** — SDK splits the key locally and uploads encrypted shares; returns a one-time `tempPassword`
-    3. **Employee calls `acceptOrgWalletAccessWithPassword`** — decrypts the provisioned shares with `tempPassword`, re-encrypts with their own wallet password, and saves their device share (S0) to your `shareStore`
-
-    ```typescript
-    // Step 2 — master side
-    const { tempPassword } = await sdk.provisionOrgMemberWalletAccess(masterUserRef, {
-      memberId,
-      walletId,
-      address,
-      chainType: EChainType.EVM,
-      masterPassword,
-    });
-
-    // Step 3 — employee side
-    await sdk.acceptOrgWalletAccessWithPassword(employeeUserRef, {
-      walletId,
-      address,
-      chainType: EChainType.EVM,
-      memberId,
-      tempPassword,
-      ownPassword: employeeWalletPassword,
-    });
-    ```
-
-    After step 3 the employee can sign transactions with their own password — the master's password is never involved in the employee's signing flow.
+  <Accordion title="How do employees get wallet access?">
+    Master calls `provisionOrgMemberWalletAccess`; employee calls
+    `acceptOrgWalletAccessWithPassword`. Device share is stored in your `shareStore` after accept.
   </Accordion>
 </AccordionGroup>
-
----
 
 ## Multisig & Orders
 
 <AccordionGroup>
-  <Accordion title="Can I set the vault name when calling createMultisig?">
-    **No.** `createMultisig` does not accept a `name` field. The vault is created first, and you set its name in a separate call afterward:
-
-    ```typescript
-    const vault = await sdk.createMultisig({
-      chain: EChainType.EVM,
-      owners: ['0x...', '0x...'],
-      threshold: 2,
-      chainIds: ['1'],
-      userRef,
-    });
-
-    await sdk.updateMultisigName({
-      multisigId: vault.id,
-      name: 'Treasury',
-    });
-    ```
-
-    This two-step pattern is intentional — the vault ID is only known after creation, and naming is a metadata operation independent of the on-chain deployment.
+  <Accordion title="Do I set vault name on createMultisig?">
+    **No.** Create returns the vault; call `updateMultisigName` afterward.
   </Accordion>
 
-  <Accordion title="Are estimateActivationFee and estimateOrderExecutionFee accurate?">
-    **Not in the current release.** Both methods currently return a **placeholder value** of `0.001` rather than a live on-chain estimate. Do not use these values to display fee previews in a production UI.
-
-    For accurate gas / fee estimates, query a chain RPC directly (e.g. `eth_estimateGas` for EVM, or your preferred Solana / Bitcoin fee API) and present those figures to your users. The SDK team is tracking this as a known limitation.
+  <Accordion title="Are estimateActivationFee / estimateOrderExecutionFee accurate?">
+    Currently return **placeholder** values (`0.001`). Use chain RPC or your own estimation for
+    production UX.
   </Accordion>
 </AccordionGroup>

@@ -1,8 +1,3 @@
 ---
 openapi: delete /sdk/wallets/{chainType}/{address}
-title: "Permanently Delete a Wallet by Chain Type and Address"
-sidebarTitle: "Delete Wallet"
-description: "DELETE /sdk/wallets/{chainType}/{address} - Permanently removes the wallet identified by chain type and address from the authenticated user."
 ---
-
-Permanently delete a wallet owned by the authenticated user. Both the `chainType` and `address` path parameters are required to uniquely identify the wallet across supported blockchains. This action is irreversible — ensure key material has been backed up before deleting.

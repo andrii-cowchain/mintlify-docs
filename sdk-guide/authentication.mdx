@@ -1,239 +1,123 @@
 ---
-title: "API Keys and Wallet-Password Sessions in the Cowchain SDK"
-sidebarTitle: "Authentication"
-description: "Configure API keys, understand automatic HTTP headers, and manage wallet-password sessions to safely unlock key material for crypto operations."
+title: 'Authentication'
+description: 'API keys, headers, and wallet-password sessions'
+icon: 'key'
 ---
 
-Authentication in the Cowchain SDK works at two levels. First, your **API key** identifies and authorizes your backend with the Trustodian platform — it is sent automatically on every request. Second, a **wallet-password session** unlocks the encrypted server share for a specific user so that the SDK can reconstruct keys locally for signing operations. You must establish both before calling any method that touches private-key material.
+## Server-Side Only
 
-## Server-Side Only Requirement
+The SDK is designed for **integrator backends**. Your API key and end-user wallet passwords must never be exposed in browser or mobile client code.
 
-The SDK is designed exclusively for **integrator backends**. Exposing your API key or a user's wallet password in browser JavaScript, a mobile app bundle, or any client-side environment breaks the non-custodial security model entirely.
+## API Key
 
-<Warning>
-  Run `TrustodianSDK` on your server only. Never import it into a React, Vue, React Native, or
-  similar client-side application. Your API key and all wallet passwords must remain on the backend
-  and must never be sent to or stored on the client.
-</Warning>
-
-## Getting Your API Key
-
-<Steps>
-  <Step title="Sign in to the Dashboard">
-    Go to [app.trustodian.com](https://app.trustodian.com) and log in with your integrator account.
-  </Step>
-  <Step title="Open API Keys settings">
-    Navigate to **Settings → API Keys** in the left sidebar.
-  </Step>
-  <Step title="Create a new key">
-    Click **Create API Key**, give it a descriptive label (e.g. `production-backend`), and select
-    the permission scopes your integration requires.
-  </Step>
-  <Step title="Copy and store securely">
-    Copy the key immediately — it will only be shown once. Store it in a secrets manager or
-    environment variable. Never commit it to source control.
-  </Step>
-  <Step title="Pass it to the SDK">
-    Provide the key as `apiKey` in your `TrustodianSDK` constructor:
-
-    ```typescript
-    import { TrustodianSDK, InMemoryShareStore } from 'vaults-multichain-sdk';
-
-    const sdk = new TrustodianSDK({
-      apiKey: process.env.TRUSTODIAN_API_KEY!,
-      network: 'testnet',
-      shareStore: new InMemoryShareStore(),
-    });
-    ```
-  </Step>
-</Steps>
-
-## HTTP Headers the SDK Sets Automatically
-
-You do not need to configure request headers manually. The SDK manages the following on every outbound request:
-
-| Header | When sent | Value |
-| --- | --- | --- |
-| `x-api-key` | Always | Your API key from the constructor |
-| `Content-Type` | Always | `application/json` |
-
-<Info>
-  The Trustodian web and mobile apps also use an `x-device-id` header for native JWT flows. **The
-  Node SDK does not send `x-device-id`** — that header is not applicable to server-side SDK
-  integrations.
-</Info>
-
-## The `userRef` Identifier
-
-`userRef` is the Trustodian user ID associated with your API key. It ties together wallet-password sessions, `shareStore` entries, and crypto method calls. Resolve it once at the start of your session and reuse the value throughout:
+1. Sign in to the [Trustodian Dashboard](https://app.trustodian.com)
+2. Go to **Settings** → **API Keys**
+3. Create a key with the permissions your integration needs
+4. Pass it to `TrustodianSDK` as `apiKey`
 
 ```typescript
-const userRef = await sdk.getSdkUserId();
-```
-
-If you also need the full user profile (email, name, etc.) you can call `getSdkUser()` instead, which returns the complete object.
-
-## Wallet-Password Session Lifecycle
-
-Any SDK method that reconstructs keys — `createWallet`, `importWallet`, `sendTransaction`, `signOrder`, and related operations — requires an active wallet-password session. The session derives decryption keys in memory from the user's wallet password using OPRF; without it, the encrypted server share cannot be decrypted.
-
-### Setting a password for the first time
-
-Call `setWalletPassword` once per user to register their password with the Trustodian API and unlock the session in one step:
-
-```typescript
-const userRef = await sdk.getSdkUserId();
-
-await sdk.setWalletPassword({
-  userRef,
-  password: walletPassword,        // from your authenticated user's request
-  passwordHint: 'optional hint',   // shown to the user if they forget
-});
-```
-
-### Unlocking on subsequent requests
-
-After the first setup, call `unlockWalletSession` at the start of any request that performs a crypto operation:
-
-```typescript
-await sdk.unlockWalletSession(userRef, walletPassword);
-```
-
-### Locking when done
-
-Always lock the session when you are finished — this clears all in-memory key material:
-
-```typescript
-sdk.lockWalletSession(userRef);
-```
-
-The SDK also enforces an automatic TTL (default **5 minutes**, configurable via `keyTtlMs`) after which in-memory keys are cleared automatically.
-
-### Session methods reference
-
-| Method | Purpose |
-| --- | --- |
-| `setWalletPassword(params)` | First-time password registration and session unlock |
-| `unlockWalletSession(userRef, password)` | Re-authenticate before crypto operations |
-| `lockWalletSession(userRef)` | Explicitly clear in-memory key material |
-| `getEncTokenStatus(userRef)` | Check whether a wallet password has been configured |
-| `getWalletPasswordHint(userRef)` | Retrieve the optional password hint |
-
-### Full session example
-
-```typescript
-import { TrustodianSDK, InMemoryShareStore, EChainType } from 'vaults-multichain-sdk';
+import { TrustodianSDK, InMemoryShareStore } from 'vaults-multichain-sdk';
 
 const sdk = new TrustodianSDK({
   apiKey: process.env.TRUSTODIAN_API_KEY!,
   network: 'testnet',
   shareStore: new InMemoryShareStore(),
 });
-
-const userRef = await sdk.getSdkUserId();
-const walletPassword = getWalletPasswordFromRequest(); // collect from authenticated user
-
-// Unlock the session (use setWalletPassword on first use, unlockWalletSession after)
-await sdk.unlockWalletSession(userRef, walletPassword);
-
-try {
-  const { wallets } = await sdk.createWallet({
-    chain: EChainType.EVM,
-    userRef,
-    password: walletPassword,
-    mode: 'generate',
-  });
-  console.log('Address:', wallets[0].address);
-} finally {
-  // Always lock when the operation is complete
-  sdk.lockWalletSession(userRef);
-}
 ```
 
-## Async Context Helper: `runWithUserRef`
+## HTTP Headers (automatic)
 
-If you prefer not to pass `userRef` explicitly to every nested crypto call, wrap your operations in `runWithUserRef`. The SDK uses Node.js `AsyncLocalStorage` under the hood, so all calls within the callback automatically inherit the active `userRef`:
+The SDK sets these on every request:
+
+| Header | When | Value |
+| ------ | ---- | ----- |
+| `x-api-key` | Always | Your API key |
+| `Content-Type` | Always | `application/json` |
+
+<Info>
+  The web/mobile apps also use `x-device-id` for mobile sessions. **The Node SDK does not send
+  `x-device-id`** — that header applies to native app JWT flows, not server-side SDK integration.
+</Info>
+
+## Wallet Password Session (required for crypto)
+
+Before `createWallet`, `importWallet`, `sendTransaction`, `signOrder`, or any operation that reconstructs keys:
+
+```typescript
+const userRef = await sdk.getSdkUserId();
+
+// First time
+await sdk.setWalletPassword({
+  userRef,
+  password: userPassword,
+  passwordHint: 'optional hint',
+});
+
+// Later sessions
+await sdk.unlockWalletSession(userRef, userPassword);
+
+// When done (or before idle timeout)
+sdk.lockWalletSession(userRef);
+```
+
+| Method | Purpose |
+| ------ | ------- |
+| `setWalletPassword` | First-time setup + unlock |
+| `unlockWalletSession` | Re-auth before crypto ops |
+| `lockWalletSession` | Clear in-memory key material |
+| `getEncTokenStatus` | Check if password is configured |
+| `getWalletPasswordHint` | Read optional hint |
+
+### Async context helper
+
+If you omit `userRef` on a crypto call, wrap the operation in:
 
 ```typescript
 await sdk.runWithUserRef(userRef, async () => {
-  await sdk.sendTransaction({
-    chain: EChainType.EVM,
-    from: '0xYourAddress',
-    to: '0xRecipient',
-    amount: '0.1',
-    chainId: 11155111,
-  });
+  await sdk.sendTransaction({ chain: EChainType.EVM, from, to, amount: '0.1', chainId: 1, ... });
 });
 ```
 
-<Tip>
-  `runWithUserRef` is especially useful in request-handler middleware where you resolve `userRef`
-  once and want all downstream service calls to share it without threading the value through every
-  function signature.
-</Tip>
+On Node.js the SDK uses `AsyncLocalStorage` so nested calls inherit the active `userRef`.
+
+## `userRef`
+
+`userRef` is the Trustodian user id for the API key owner. Resolve it once per session:
+
+```typescript
+const userRef = await sdk.getSdkUserId();
+```
+
+Use the same value for `setWalletPassword`, `unlockWalletSession`, `shareStore` keys, and crypto method calls. Call `getSdkUser()` when you need the full profile (`email`, `name`, etc.).
 
 ## Security Best Practices
 
 <AccordionGroup>
-  <Accordion title="Store API keys in environment variables, never in source code">
-    Always read your API key from `process.env`:
-
+  <Accordion title="Environment variables for API keys">
     ```typescript
     apiKey: process.env.TRUSTODIAN_API_KEY!
     ```
-
-    Use a secrets manager (AWS Secrets Manager, HashiCorp Vault, GCP Secret Manager) in production
-    and inject the value at runtime. Rotate keys immediately if one is ever exposed.
   </Accordion>
-  <Accordion title="Never log or persist wallet passwords">
-    Collect the wallet password from your authenticated user on each request (over HTTPS) and use
-    it only within that request's session. Do not write it to logs, databases, environment
-    variables, or config files. The integrator's persistent store (`shareStore`) holds only the
-    device share (S0) — treat that like sensitive key material as well.
+  <Accordion title="Never log or store wallet passwords">
+    Collect the password from your user per session (server-side only). Do not hardcode it, put it in
+    env vars, or save it in your database. The integrator persists only the **device share (S0)** via
+    `shareStore` — treat that like key material too.
   </Accordion>
   <Accordion title="Implement IntegratorShareStore for production">
-    `InMemoryShareStore` resets every time your process restarts and is suitable only for local
-    development. In production, implement `IntegratorShareStore` backed by a durable, encrypted
-    database. Each record is keyed by `(userRef, walletId)` and contains the share bytes and a
-    version number that must stay in sync with the server share after any rotation.
+    `InMemoryShareStore` is for development only. Persist S0 per `(userRef, walletId)` in your DB.
   </Accordion>
-  <Accordion title="Lock sessions proactively">
-    The default in-memory TTL is 5 minutes (`keyTtlMs`). Do not rely solely on this timeout.
-    Call `lockWalletSession(userRef)` explicitly when a user's request is complete, when a session
-    ends, or whenever key material is no longer needed. Use `try/finally` blocks to guarantee
-    locking even when errors occur.
-  </Accordion>
-  <Accordion title="Validate and authorize at your API boundary">
-    The Cowchain SDK trusts that the wallet password you pass belongs to the correct authenticated
-    user. Your API layer must authenticate and authorize requests before extracting the wallet
-    password and calling the SDK — the SDK itself does not enforce application-level auth.
+  <Accordion title="Call lockWalletSession when idle">
+    Default in-memory TTL is 5 minutes (`keyTtlMs`). Lock explicitly when a user session ends.
   </Accordion>
 </AccordionGroup>
 
 ## Error Responses
 
-The SDK surfaces HTTP errors as typed exceptions that extend `TrustodianBaseError`. Use `isTrustodianError()` to narrow the type and handle specific cases like expired sessions or key mismatches.
+| Status | Meaning |
+| ------ | ------- |
+| `401` | Invalid or missing API key |
+| `403` | API key lacks permission |
+| `400` | Invalid request body |
+| `429` | Rate limited |
 
-| HTTP Status | Meaning | Common cause |
-| --- | --- | --- |
-| `401` | Invalid or missing API key | Key not provided, malformed, or revoked |
-| `403` | API key lacks permission | Key exists but does not have the required scope |
-| `400` | Invalid request body | Missing required field or invalid parameter value |
-| `429` | Rate limited | Too many requests in a short window; back off and retry |
-
-```typescript
-import { isTrustodianError, UnauthorizedError, KeyMismatchError } from 'vaults-multichain-sdk';
-
-try {
-  await sdk.sendTransaction({ /* ... */ });
-} catch (err) {
-  if (isTrustodianError(err)) {
-    if (err instanceof UnauthorizedError) {
-      // API key invalid or session expired
-    } else if (err instanceof KeyMismatchError) {
-      // Device share version mismatch — re-unlock with password to trigger recovery
-    }
-  }
-  throw err;
-}
-```
+SDK errors extend `TrustodianBaseError` — use `isTrustodianError()` and typed classes like `UnauthorizedError`, `KeyMismatchError`.

@@ -1,34 +1,53 @@
 ---
-title: "Cowchain SDK: Non-Custodial Multi-Chain Wallet Library"
-sidebarTitle: "Introduction"
-description: "TrustodianSDK is a TypeScript library for server-side integrators to manage non-custodial multi-chain wallets using 2-of-3 Shamir key splitting."
+title: 'Introduction'
+description: 'Getting started with vaults-multichain-sdk (TrustodianSDK)'
+icon: 'rocket'
 ---
 
-The Cowchain SDK (`vaults-multichain-sdk`, also referred to as `TrustodianSDK`) is a TypeScript library built for **server-side integrators**. It wraps the Trustodian `/sdk/*` REST API and handles everything from encrypted Shamir share management to chain-specific transaction signing — all without the private key ever existing in one place at the same time. Whether you are building a custody-free exchange, a B2B payment service, or a multi-chain portfolio product, the SDK lets you manage wallets across six chains through a single, consistent interface.
+## Overview
 
-## What Is the Non-Custodial 2-of-3 Model?
+**vaults-multichain-sdk** (`TrustodianSDK`) is a TypeScript library for **server-side** integrators. It wraps the Trustodian `/sdk/*` REST API and handles non-custodial key management (OPRF, encrypted Shamir shares, local signing).
 
-Cowchain ensures that **no single party ever holds a complete private key**. When a wallet is created, the SDK splits the private key into three mathematically related shares using **Shamir's Secret Sharing**. Any two of those three shares are sufficient to reconstruct the key for signing — but one share alone is cryptographically useless.
+## Non-custodial model
 
-| Share | Held by | How it is protected |
-| --- | --- | --- |
-| **Device Share (S0)** | You, via your `shareStore` implementation | Stored in your own database; your responsibility |
-| **Server Share (S1)** | Trustodian API | AES-GCM encrypted with a key derived from the wallet password via OPRF |
-| **Recovery Share (S2)** | Trustodian crypto service | AES-GCM encrypted with a second key + Vault Transit |
+Trustodian **never stores a complete private key**. Each wallet uses **2-of-3 Shamir shares**; only two shares are needed to sign, and they never exist together on the server.
 
-Signing happens **inside the SDK process, in memory**. The SDK fetches the encrypted server share, combines it with your device share, reconstructs the key, signs the transaction, and immediately zeroizes the key from memory. Trustodian's servers never see the reconstructed private key; your servers never store it at rest.
+| Piece | Who provides it |
+| ----- | ---------------- |
+| **API key** | Authenticates your backend to `/sdk/*` |
+| **Device share (S0)** | You persist via `shareStore` on your server |
+| **Wallet password** | Your user (or service account) — unlocks encrypted server shares |
+| **userRef** | `await sdk.getSdkUserId()` — ties sessions and `shareStore` entries together |
 
-<Note>
-  Read-only calls such as listing wallets or fetching portfolio data require only your API key. Any
-  operation that **touches keys** — create, send, sign — additionally requires a `shareStore`
-  implementation and an active wallet-password session. See [Key Management](/sdk-guide/key-management)
-  and [Authentication](/sdk-guide/authentication).
-</Note>
+**Recommended:** use `TrustodianSDK` for create, sign, send, and multisig flows. The SDK fetches encrypted shares, decrypts locally, signs, and zeroizes keys. Calling raw HTTP without the SDK means reimplementing OPRF, Shamir, and chain-specific signing yourself.
+
+Read-only calls (list wallets, portfolio, orders) need only the API key. **Any operation that touches keys** needs `shareStore` + wallet-password session first — see [Key Management](/sdk-guide/key-management) and [Authentication](/sdk-guide/authentication).
+
+<CardGroup cols={2}>
+  <Card title="Multi-Chain Support" icon="link">
+    EVM, Solana, Tron, Bitcoin, Cardano, and XRP
+  </Card>
+  <Card title="Non-Custodial Keys" icon="shield">
+    2-of-3 Shamir shares — backend never holds a full private key
+  </Card>
+  <Card title="Multisig Vaults" icon="users">
+    Personal and organization-scoped vaults
+  </Card>
+  <Card title="Order Workflows" icon="clipboard-check">
+    Create, sign, reject, and execute multisig orders
+  </Card>
+</CardGroup>
+
+<Warning>
+  **SDK v2** requires a `shareStore` implementation and wallet-password session setup before any
+  crypto operation. See [Key Management](/sdk-guide/key-management) and
+  [Authentication](/sdk-guide/authentication).
+</Warning>
 
 ## Supported Chains
 
-| Chain | `EChainType` | Networks |
-| --- | --- | --- |
+| Chain | `EChainType` | Notes |
+| ----- | ------------ | ----- |
 | **EVM** | `EVM` | Ethereum, Base, Arbitrum, Optimism, Polygon, BNB, Avalanche (+ testnets) |
 | **Solana** | `SOL` | Mainnet / devnet |
 | **Tron** | `TRON` | Mainnet / Shasta |
@@ -37,8 +56,6 @@ Signing happens **inside the SDK process, in memory**. The SDK fetches the encry
 | **XRP** | `XRP` | Mainnet / testnet |
 
 ## Installation
-
-Install the SDK with your preferred package manager:
 
 <CodeGroup>
 
@@ -50,81 +67,74 @@ npm install vaults-multichain-sdk
 yarn add vaults-multichain-sdk
 ```
 
-```bash pnpm
-pnpm add vaults-multichain-sdk
-```
-
 </CodeGroup>
 
-<Warning>
-  **Node.js backend only.** Never ship the SDK to a browser or mobile client — your API key and
-  wallet passwords must remain on your server. Node 18+ includes `Buffer` globally; no extra
-  polyfills are needed.
-</Warning>
+> **Node.js only.** Run the SDK on your backend — never expose the API key or wallet password to clients. Node 18+ includes `Buffer` globally; no extra polyfills needed.
 
-## Quick Start
-
-The snippet below shows the minimal flow: initialize the SDK, set a wallet password for the first time, and create an EVM wallet.
+## Quick Start (v2)
 
 ```typescript
 import { TrustodianSDK, InMemoryShareStore, EChainType } from 'vaults-multichain-sdk';
 
-// Initialize once per server process (or per request in stateless environments)
 const sdk = new TrustodianSDK({
   apiKey: process.env.TRUSTODIAN_API_KEY!,
-  network: 'testnet',           // 'mainnet' | 'testnet'
-  shareStore: new InMemoryShareStore(), // replace with your DB adapter in production
+  network: 'testnet', // required: 'mainnet' | 'testnet'
+  shareStore: new InMemoryShareStore(), // use your DB adapter in production
 });
 
-// Resolve the Trustodian user id for this API key
 const userRef = await sdk.getSdkUserId();
 
-// Wallet password comes from your authenticated user — never hardcode or persist it
+// Password comes from your user (request body, secure prompt, etc.) — never hardcode or persist it
 const walletPassword = getWalletPasswordFromUserRequest();
 
-// First-time setup: proves knowledge of the password to the API (OPRF + enc-token)
+// 1. First-time wallet password
 await sdk.setWalletPassword({ userRef, password: walletPassword });
 
-// Create an EVM wallet — S0 is saved automatically to shareStore
+// 2. Create wallet (local keygen)
 const { wallets } = await sdk.createWallet({
   chain: EChainType.EVM,
   userRef,
   password: walletPassword,
-  mode: 'generate',
+  mode: 'generate', // or 'ecdh' when genWalletFromMnemonic is enabled
 });
 
-console.log('New wallet address:', wallets[0].address);
+console.log('Address:', wallets[0].address);
 ```
 
 <Warning>
-  The wallet password shown here is for illustration only. **Never** hardcode it in source code,
-  environment variables, or configuration files. **Never** log it or the device share. Pass it
-  per-request from your authenticated user and call `lockWalletSession(userRef)` when the session
-  ends. See [Authentication](/sdk-guide/authentication) for the full session lifecycle.
+  **Wallet password handling**
+
+  - **Pass it per request** from your authenticated user — do not hardcode it in source code.
+  - **Never store** in env vars, config files, databases, or `shareStore` (only device share S0 belongs there).
+  - **Never log** the password, device shares, or reconstructed keys — not even in debug logs.
+  - **Do not send** to browser or mobile clients; collect and use it only on your backend during the session, then call `lockWalletSession(userRef)` when done.
+
+  The literal password in docs is for illustration only. See [Authentication](/sdk-guide/authentication) for session setup.
 </Warning>
 
 ## Configuration Options
 
-Pass a configuration object when you instantiate `TrustodianSDK`. The first three options are required for all key-touching operations.
-
 | Option | Required | Default | Description |
-| --- | --- | --- | --- |
-| `apiKey` | **Yes** | — | Sent as `x-api-key` on every request |
+| ------ | -------- | ------- | ----------- |
+| `apiKey` | **Yes** | — | Sent as `x-api-key` |
 | `network` | **Yes** | — | `'mainnet'` or `'testnet'` |
-| `shareStore` | **Yes** | — | Your `IntegratorShareStore` for device share (S0) |
-| `apiBaseUrl` | No | See below | Override the API host URL |
+| `shareStore` | **Yes** | — | `IntegratorShareStore` for device share (S0) |
+| `apiBaseUrl` | No | See below | Override API host |
 | `apiPathPrefix` | No | `/sdk` | HTTP path prefix |
-| `timeout` | No | `30000` | Per-request timeout in milliseconds |
-| `keyTtlMs` | No | `300000` | In-memory wallet-password session TTL (5 min) |
-| `derivationUserId` | No | From `GET /sdk/users/me` | HKDF user-id override |
-| `oprfPublicKeyHex` | No | Fetched at runtime | Pin the OPRF public key |
-| `rpcOverrides` | No | `{}` | Per-chain custom RPC URLs |
+| `timeout` | No | `30000` | Request timeout (ms) |
+| `keyTtlMs` | No | `300000` | In-memory key1 session TTL |
+| `derivationUserId` | No | from `GET /sdk/users/me` | HKDF user id override |
+| `oprfPublicKeyHex` | No | fetched at runtime | Pin OPRF public key |
+| `rpcOverrides` | No | `{}` | Per-chain RPC URLs |
 
-**Default `apiBaseUrl` when omitted:**
+**Default `apiBaseUrl` (if omitted):**
 
-When `apiBaseUrl` is not provided, the SDK connects to the Trustodian-managed API endpoint for the selected `network`. Contact your Trustodian account representative for the production endpoint URL, or override `apiBaseUrl` with a value provided by the Trustodian team for your environment.
+| `network` | URL |
+| --------- | --- |
+| `mainnet` | `https://stage-api.trustodian.online` |
+| `testnet` | `https://afridax-backend-production.up.railway.app` |
 
-You can override any of the advanced defaults as shown below:
+Override with `apiBaseUrl` for your deployment.
 
 ```typescript
 const sdk = new TrustodianSDK({
@@ -143,19 +153,15 @@ const sdk = new TrustodianSDK({
 
 <CardGroup cols={2}>
   <Card title="Authentication" icon="key" href="/sdk-guide/authentication">
-    Learn how to configure API keys, understand the HTTP headers the SDK manages automatically, and
-    set up wallet-password sessions for crypto operations.
+    API key, headers, and session setup
   </Card>
   <Card title="Key Management" icon="shield-halved" href="/sdk-guide/key-management">
-    Understand the 2-of-3 Shamir share model, implement `IntegratorShareStore` for your database,
-    and handle password change and recovery flows.
+    shareStore, wallet password, OPRF
   </Card>
   <Card title="Wallets" icon="wallet" href="/sdk-guide/wallets">
-    Create and import wallets, send transactions, fetch balances, and manage portfolio data across
-    all supported chains.
+    Create, send, portfolio
   </Card>
   <Card title="Organization" icon="building" href="/sdk-guide/organization">
-    Set up B2B organization vaults, manage multisig policies, and coordinate approvals across team
-    members.
+    B2B org wallets and vaults
   </Card>
 </CardGroup>

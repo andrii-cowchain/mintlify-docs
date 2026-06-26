@@ -1,67 +1,36 @@
 ---
-title: "Multi-Chain Wallet Management with the Cowchain SDK"
-sidebarTitle: "Wallets"
-description: "Create, import, and manage non-custodial wallets, send transactions, track portfolio balances, and estimate fees across multiple blockchains."
+title: 'Wallets'
+description: 'Create, manage, and transact with TrustodianSDK'
+icon: 'wallet'
 ---
-
-The Cowchain SDK gives you full programmatic control over non-custodial, multi-chain wallets — from creation through key management, transaction dispatch, portfolio analytics, and teardown. Private key material is always split and stored locally via MPC; it is never transmitted to or reconstructed on the server. This page walks you through every wallet operation in the order you are most likely to need it.
 
 ## Prerequisites
 
-Before calling any wallet method you must have a properly initialised SDK instance with session management in place. Work through the checklist below before proceeding.
+Every crypto operation requires:
 
-<Steps>
-  <Step title="Configure a share store">
-    Instantiate `TrustodianSDK` with an `InMemoryShareStore` (or your own persistent implementation) so the SDK knows where to read and write key shares.
+1. `shareStore` configured on `TrustodianSDK`
+2. `const userRef = await sdk.getSdkUserId()`
+3. `await sdk.unlockWalletSession(userRef, password)` (or `setWalletPassword` on first use)
+4. `userRef` on create/import/send/export (or `runWithUserRef`)
 
-    ```typescript
-    import { TrustodianSDK, InMemoryShareStore } from 'vaults-multichain-sdk';
-
-    const sdk = new TrustodianSDK({ shareStore: new InMemoryShareStore() });
-    ```
-  </Step>
-  <Step title="Resolve the user reference">
-    ```typescript
-    const userRef = await sdk.getSdkUserId();
-    ```
-  </Step>
-  <Step title="Unlock the wallet session">
-    On first use call `setWalletPassword`; on subsequent uses call `unlockWalletSession`.
-
-    ```typescript
-    await sdk.unlockWalletSession(userRef, password);
-    ```
-  </Step>
-  <Step title="Pass userRef to mutating operations">
-    All create / import / send / export calls require `userRef` either as an explicit parameter or via `runWithUserRef`. See [Authentication](/sdk-guide/authentication) and [Key Management](/sdk-guide/key-management) for full details.
-  </Step>
-</Steps>
-
----
+See [Authentication](/sdk-guide/authentication) and [Key Management](/sdk-guide/key-management).
 
 ## Creating Wallets
 
-The SDK supports two wallet-generation modes. Choose based on your deployment configuration (`getAppConfig().genWalletFromMnemonic`).
-
-<CodeGroup>
-
-```typescript generate (default)
+```typescript
 import { TrustodianSDK, InMemoryShareStore, EChainType } from 'vaults-multichain-sdk';
 
 await sdk.unlockWalletSession(userRef, password);
 
-// Local key generation — default for most deployments
+// Local key generation (default deployment)
 const { wallets } = await sdk.createWallet({
   chain: EChainType.EVM,
   userRef,
   password,
   mode: 'generate',
 });
-```
 
-```typescript ecdh (server mnemonic)
-// Server mnemonic + ECDH key agreement
-// Only available when getAppConfig().genWalletFromMnemonic === true
+// Server mnemonic + ECDH (when getAppConfig().genWalletFromMnemonic === true)
 const { wallets: ecdhWallets } = await sdk.createWallet({
   chain: EChainType.EVM,
   userRef,
@@ -70,17 +39,9 @@ const { wallets: ecdhWallets } = await sdk.createWallet({
 });
 ```
 
-</CodeGroup>
-
-<Info>
-  In `generate` mode the private key is derived entirely on-device. In `ecdh` mode the server contributes a mnemonic share via an Elliptic Curve Diffie-Hellman exchange — the server still never sees the full key.
-</Info>
-
----
-
 ## Importing Wallets
 
-You can bring an existing private key into Cowchain. The key is split into MPC shares **locally** and never uploaded to the server whole.
+Private key is split **locally** — never uploaded to the server.
 
 ```typescript
 await sdk.importWallet({
@@ -91,44 +52,26 @@ await sdk.importWallet({
 });
 ```
 
-<Note>
-  Importing a key that is already managed by the SDK on this device returns an error. Use `getWallet` to check for an existing entry first.
-</Note>
-
----
-
 ## Reading Wallets
 
-### Paginated list
-
-Retrieve wallets across one or more chains. The response includes pagination metadata so you can build infinite-scroll or page-by-page UIs.
-
 ```typescript
+// Paginated list
 const { wallets, total, page, limit } = await sdk.getWallets({
   page: 1,
   limit: 20,
   chainTypes: [EChainType.EVM, EChainType.SOL],
 });
-```
 
-### Single wallet
-
-Fetch a specific wallet by chain and address.
-
-```typescript
+// Single wallet by chain + address
 const wallet = await sdk.getWallet({
   chain: EChainType.EVM,
   address: '0x...',
 });
 ```
 
----
-
 ## Sending Transactions
 
-Every `sendTransaction` call requires an active unlocked session. Wrap the call in `runWithUserRef` to bind the user context automatically, or pass `userRef` directly.
-
-### Personal wallet
+Requires unlocked session. Pass `userRef` or use `runWithUserRef`.
 
 ```typescript
 await sdk.runWithUserRef(userRef, async () => {
@@ -145,29 +88,11 @@ await sdk.runWithUserRef(userRef, async () => {
 });
 ```
 
-### Organisation-scoped wallet
+For **organization-owned** wallets, add `walletScope: 'organization'` — the SDK routes share fetches to `/sdk/organization/wallets/...`.
 
-For wallets owned by an organisation, add `walletScope: 'organization'`. The SDK automatically selects the correct share-fetch path for organisation-scoped wallets.
+### New device / missing device share
 
-```typescript
-await sdk.runWithUserRef(userRef, async () => {
-  const { txHash } = await sdk.sendTransaction({
-    chain: EChainType.EVM,
-    from: senderAddress,
-    to: recipientAddress,
-    amount: '0.1',
-    chainId: 1,
-    tokenAddress: '',
-    decimals: 18,
-    isNativeToken: true,
-    walletScope: 'organization',
-  });
-});
-```
-
-### New device / missing device share (recovery rotation)
-
-If the current device is missing its share — for example after re-installing the app — pass `walletPassword` to trigger an automatic recovery-rotation flow before the transaction is signed.
+Pass `walletPassword` to trigger recovery rotation:
 
 ```typescript
 await sdk.sendTransaction({
@@ -184,49 +109,27 @@ await sdk.sendTransaction({
 });
 ```
 
-<Warning>
-  Recovery rotation rewrites the device share. Do not interrupt the process mid-flight; doing so may leave the wallet in an inconsistent state that requires manual key recovery.
-</Warning>
-
----
-
 ## Portfolio & Balances
 
-### Single wallet
-
 ```typescript
+// Single wallet
 const portfolio = await sdk.getPortfolio({
   chain: EChainType.EVM,
   address: walletAddress,
   chainId: 1,
 });
+// portfolio.tokens[].balanceUSD, priceUSD
 
-// Each token in portfolio.tokens includes balanceUSD and priceUSD
-portfolio.tokens.forEach(token => {
-  console.log(token.symbol, token.balanceUSD, token.priceUSD);
-});
-```
-
-### Batch — multiple wallets in one call
-
-```typescript
+// Batch
 const portfolios = await sdk.getWalletsPortfolio([
   { walletAddress: '0x...', chainType: EChainType.EVM, chain: '1' },
   { walletAddress: '...', chainType: EChainType.SOL, chain: 'sol_mainnet' },
 ]);
-```
 
-### Total asset value across all wallets
-
-```typescript
 const { totalAssetValueUSD } = await sdk.getTotalAssetValue();
 ```
 
----
-
 ## Transaction History
-
-Retrieve a paginated list of past transactions for any wallet address.
 
 ```typescript
 const history = await sdk.getWalletHistory({
@@ -237,11 +140,7 @@ const history = await sdk.getWalletHistory({
 });
 ```
 
----
-
 ## Fee Estimation
-
-Use `estimateFee` together with `TransactionEstimatingType` to show the user an accurate cost before they sign.
 
 ```typescript
 import { TransactionEstimatingType } from 'vaults-multichain-sdk';
@@ -254,20 +153,7 @@ const fee = await sdk.estimateFee({
 });
 ```
 
-<AccordionGroup>
-  <Accordion title="Available TransactionEstimatingType values">
-    `TransactionEstimatingType` is an enum exported directly from `vaults-multichain-sdk`. Common values include:
-
-    - `TransactionEstimatingType.Send` — standard token or native transfer
-    - Additional values may be available depending on your SDK version; consult the exported enum for the full list.
-  </Accordion>
-</AccordionGroup>
-
----
-
 ## Export Private Key
-
-You can reconstruct and export the raw private key for a wallet. This is a privileged operation; exercise caution.
 
 ```typescript
 const { privateKey } = await sdk.exportWallet({
@@ -279,14 +165,10 @@ const { privateKey } = await sdk.exportWallet({
 ```
 
 <Warning>
-  Handle exported keys with extreme care. Anyone who obtains the private key has unconditional control of the wallet. Avoid exporting keys in production integrations; prefer keeping key material inside the SDK's MPC share store at all times.
+  Handle exported keys securely. Prefer never exporting in production integrations.
 </Warning>
 
----
-
 ## Rename & Delete
-
-### Rename
 
 ```typescript
 await sdk.updateWalletName({
@@ -294,26 +176,14 @@ await sdk.updateWalletName({
   address: walletAddress,
   name: 'Treasury',
 });
-```
 
-### Delete
-
-```typescript
 await sdk.deleteWallet({
   chain: EChainType.EVM,
   address: walletAddress,
 });
 ```
 
-<Warning>
-  Deleting a wallet removes the device share. If you have not backed up the key material, access to funds on that address will be permanently lost.
-</Warning>
-
----
-
 ## Supported Tokens
-
-Search the list of tokens available on a given chain and `chainId`. Use the `search` parameter for symbol or name filtering.
 
 ```typescript
 const { tokens } = await sdk.getSupportedTokens({
@@ -325,23 +195,11 @@ const { tokens } = await sdk.getSupportedTokens({
 });
 ```
 
----
-
 ## Personal Address Book
 
-The SDK includes a built-in address book so you can save frequently used recipient addresses and retrieve them at send time.
-
 ```typescript
-await sdk.createAddressBookEntry({
-  chainType: EChainType.EVM,
-  address,
-  name,
-  // ...additional fields
-});
-
+await sdk.createAddressBookEntry({ chainType: EChainType.EVM, address, name, ... });
 const entries = await sdk.getAddressBookEntries();
 ```
 
-<Tip>
-  For full details on filtering by chain, memo support for XRP / SOL / TRON, the Force Address Book enforcement policy, and the organisation address book, see the [Address Book](/sdk-guide/address-book) guide.
-</Tip>
+See [Address Book](/sdk-guide/address-book) for details.

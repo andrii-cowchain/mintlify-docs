@@ -1,8 +1,3 @@
 ---
 openapi: get /sdk/wallets/supported-tokens/{chainType}/{chain}
-title: "List All Supported Tokens Available on a Given Chain"
-sidebarTitle: "Supported Tokens"
-description: "GET /sdk/wallets/supported-tokens/{chainType}/{chain} - Lists all tokens supported on the given chain, with contract address, symbol, and decimals."
 ---
-
-Retrieve the full list of tokens that Cowchain supports on a specific blockchain. Provide the `chainType` (e.g. `EVM`, `UTXO`) and `chain` (e.g. `ethereum`, `bitcoin`) as path parameters. The response includes each token's contract address, symbol, name, and decimal precision.

@@ -1,8 +1,3 @@
 ---
 openapi: get /sdk/wallets/utxos/{chainType}/{chain}/{walletAddress}
-title: "Get Unspent Transaction Outputs (UTXOs) for a Wallet"
-sidebarTitle: "Wallet UTXOs"
-description: "GET /sdk/wallets/utxos/{chainType}/{chain}/{walletAddress} - Returns all UTXOs for a UTXO-based wallet, including tx ID, index, value, and status."
 ---
-
-Retrieve all unspent transaction outputs (UTXOs) associated with a specific wallet on a UTXO-based blockchain such as Bitcoin. Provide the `chainType`, `chain`, and `walletAddress` path parameters to identify the wallet. The response lists each UTXO with its transaction ID, output index, value, and confirmation status.

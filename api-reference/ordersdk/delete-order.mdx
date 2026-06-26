@@ -1,8 +1,3 @@
 ---
 openapi: delete /sdk/order/{id}
-title: "Permanently Delete a Multisig Order by Its Unique ID"
-sidebarTitle: "Delete Order"
-description: "DELETE /sdk/order/{id} — Permanently deletes a multisig order by its unique ID, removing it and all associated signature data from the system."
 ---
-
-Use this endpoint to permanently remove an order from the system. Provide the order `id` as a path parameter; the API will delete the order record and all associated signature and status data. This action is irreversible — ensure the order is no longer needed before calling this endpoint.

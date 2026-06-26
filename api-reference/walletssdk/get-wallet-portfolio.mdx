@@ -1,8 +1,3 @@
 ---
 openapi: get /sdk/wallets/portfolio/{chainType}/{chain}/{walletAddress}
-title: "Retrieve the Full Token Portfolio for a Specific Wallet"
-sidebarTitle: "Get Portfolio"
-description: "GET /sdk/wallets/portfolio/{chainType}/{chain}/{walletAddress} - Returns token balances and USD values for every token held in the specified wallet."
 ---
-
-Fetch the token portfolio for a specific wallet. The `chainType`, `chain`, and `walletAddress` path parameters together uniquely identify the wallet on a given network. The response contains each token held by the wallet along with its balance, decimals, and current USD value.
