@@ -1,0 +1,8 @@
+---
+openapi: post /sdk/order/reject/xrp
+title: "Reject a Pending XRP Multisig Order via the Order SDK"
+sidebarTitle: "Reject XRP Order"
+description: "POST /sdk/order/reject/xrp — Records a signer's rejection of a pending XRP Ledger multisig order, preventing it from reaching the submission threshold."
+---
+
+Use this endpoint to register a signer's explicit rejection of a pending XRP Ledger order. Submit the order ID along with the rejecting signer's details; the order will be marked as rejected and will not be submitted to the XRP Ledger.

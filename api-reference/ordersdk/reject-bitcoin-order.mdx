@@ -1,0 +1,8 @@
+---
+openapi: post /sdk/order/reject/btc
+title: "Reject a Pending Bitcoin Order via the Order SDK"
+sidebarTitle: "Reject Bitcoin Order"
+description: "POST /sdk/order/reject/btc — Records a signer's rejection of a pending Bitcoin multisig order, preventing it from reaching the broadcast threshold."
+---
+
+Use this endpoint to register a signer's explicit rejection of a pending Bitcoin order. Submit the order ID along with the rejecting signer's details; the order will be marked as rejected and will not be broadcast to the Bitcoin network.

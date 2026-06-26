@@ -1,0 +1,8 @@
+---
+openapi: get /sdk/order/tx/tron/{id}
+title: "Get Raw Tron Transaction Data for a Pending Order"
+sidebarTitle: "Tron TX Data"
+description: "GET /sdk/order/tx/tron/{id} — Retrieves the raw Tron transaction data for the specified order ID, ready for offline signing or broadcast."
+---
+
+Use this endpoint to retrieve the raw Tron transaction data associated with a specific order. Provide the order `id` as a path parameter and the API returns the serialized transaction payload required for offline signing by each multisig participant before the order can be executed on the Tron network.

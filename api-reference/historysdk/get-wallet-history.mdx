@@ -1,0 +1,8 @@
+---
+openapi: get /sdk/history/wallet/{chainType}/{walletAddress}
+title: "Retrieve the Complete Transaction History for a Wallet"
+sidebarTitle: "Wallet History"
+description: "GET /sdk/history/wallet/{chainType}/{walletAddress} - Returns a wallet's complete transaction history, ordered newest-first, with hash, value, and status."
+---
+
+Retrieve the transaction history for a specific wallet on a given chain. Provide the `chainType` and `walletAddress` path parameters to identify the wallet. The response returns a list of historical transactions ordered from newest to oldest, each including hash, timestamp, value, token, and status.

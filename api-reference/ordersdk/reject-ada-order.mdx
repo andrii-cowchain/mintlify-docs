@@ -1,0 +1,8 @@
+---
+openapi: post /sdk/order/reject/ada
+title: "Reject a Pending Cardano Order via the Order SDK"
+sidebarTitle: "Reject ADA Order"
+description: "POST /sdk/order/reject/ada — Records a signer's rejection of a pending Cardano ADA multisig order, preventing it from reaching the broadcast threshold."
+---
+
+Use this endpoint to register a signer's explicit rejection of a pending Cardano ADA order. Submit the order ID along with the rejecting signer's details; the order will be marked as rejected and will not be broadcast to the Cardano network.

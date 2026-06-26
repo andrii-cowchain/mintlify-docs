@@ -1,0 +1,8 @@
+---
+openapi: get /sdk/wallets
+title: "List Wallets for the Authenticated User (Paginated)"
+sidebarTitle: "List Wallets"
+description: "GET /sdk/wallets - Returns a paginated list of wallets for the authenticated user; use page and limit query parameters for efficient retrieval."
+---
+
+Retrieve a paginated list of wallets belonging to the authenticated user. Use the `page` and `limit` query parameters to control which slice of results is returned. This endpoint is recommended when the user may have a large number of wallets, as it keeps response sizes manageable.

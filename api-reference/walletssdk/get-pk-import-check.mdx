@@ -1,0 +1,8 @@
+---
+openapi: get /sdk/wallets/pk-import/check
+title: "Check Whether an Account Is Eligible for Key Import"
+sidebarTitle: "PK Import Check"
+description: "GET /sdk/wallets/pk-import/check - Checks whether the authenticated user's account meets prerequisites for private key import and lists any blockers."
+---
+
+Verify whether the authenticated user's account is ready to accept a private key import before starting the import flow. The endpoint validates account prerequisites (such as MFA configuration and existing key-share state) and returns an eligibility flag along with details of any conditions that must be met first.

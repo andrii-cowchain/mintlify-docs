@@ -1,0 +1,8 @@
+---
+openapi: get /sdk/wallets/share/s/{chainType}/{address}
+title: "Retrieve the Server-Side MPC Key Share for a Wallet"
+sidebarTitle: "Server Key Share"
+description: "GET /sdk/wallets/share/s/{chainType}/{address} - Returns the encrypted server-side MPC key share for the wallet at the specified chain and address."
+---
+
+Retrieve the encrypted server key share for a specific wallet. This is the server-side component of the MPC key pair and is required alongside the client share when performing signing operations. Provide the `chainType` and `address` path parameters to identify the target wallet.

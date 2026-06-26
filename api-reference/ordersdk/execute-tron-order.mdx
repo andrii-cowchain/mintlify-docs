@@ -1,0 +1,8 @@
+---
+openapi: patch /sdk/order/execute/tron
+title: "Execute a Fully Signed Tron Multisig Order on-Chain"
+sidebarTitle: "Execute Tron Order"
+description: "PATCH /sdk/order/execute/tron — Executes a fully signed Tron multisig order by broadcasting the transaction on-chain and returning the transaction hash."
+---
+
+Use this endpoint to execute a Tron order that has gathered all required signatures. The API assembles the signed transaction and broadcasts it to the Tron network, returning the on-chain transaction hash and updating the order status to executed.

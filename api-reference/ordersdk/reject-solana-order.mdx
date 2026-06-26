@@ -1,0 +1,8 @@
+---
+openapi: post /sdk/order/reject/sol
+title: "Reject a Pending Solana Multisig Order via the Order SDK"
+sidebarTitle: "Reject Solana Order"
+description: "POST /sdk/order/reject/sol — Records a signer's rejection of a pending Solana multisig order, preventing it from reaching the execution threshold."
+---
+
+Use this endpoint to register a signer's explicit rejection of a pending Solana order. Submit the order ID along with the rejecting signer's details; the order will be marked as rejected and will not proceed to execution on the Solana network.

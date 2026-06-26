@@ -1,0 +1,8 @@
+---
+openapi: get /sdk/wallets/all
+title: "Retrieve All Wallets Belonging to the Current User"
+sidebarTitle: "List All Wallets"
+description: "GET /sdk/wallets/all - Returns every wallet for the authenticated user in a single response, including address, chain type, and wallet metadata."
+---
+
+Retrieve the complete list of wallets associated with the authenticated user. Unlike the paginated endpoint, this request returns all wallet records in one response and is best suited for use cases where the total wallet count is small or when you need a full snapshot at once.

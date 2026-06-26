@@ -1,0 +1,373 @@
+---
+title: "Create and Manage Multisig Vaults with Cowchain SDK"
+sidebarTitle: "Multisig"
+description: "Create threshold-signing vaults on EVM, Solana, Tron, Bitcoin, Cardano, and XRP. Manage owners, activate on-chain, and query vault state via the SDK."
+---
+
+Multisig vaults require a configurable number of owner approvals before any transaction executes, giving your team or protocol shared, non-custodial control over funds. Cowchain implements best-in-class standards on each chain — Gnosis Safe on EVM, Squads V4 on Solana, native permission systems on Tron and XRP, and script-based approaches on Bitcoin and Cardano — so you get a consistent API regardless of the underlying technology.
+
+## Supported Chains
+
+| Chain | Implementation | Activation Required | Activation Cost | Settings Updates |
+|---|---|---|---|---|
+| **EVM** | Gnosis Safe | Yes — deploys Safe contract | Gas fee (varies by network) | ✅ Supported |
+| **Solana** | Squads V4 | Yes — creates on-chain accounts | ~0.0021 SOL | ✅ Supported\* |
+| **Tron** | Native Multisig | Yes — converts account | 100 TRX minimum balance | ✅ Supported |
+| **Bitcoin** | P2WSH | **Not required** | — | ❌ Not available |
+| **Cardano** | Native Scripts | **Not required** | — | ❌ Not available |
+| **XRP** | SignerList | Yes — SignerListSet + DisableMaster | 1.2 XRP (base + owner reserve) | ✅ Supported |
+
+<Info>
+  On Bitcoin and Cardano, the multisig address is derived directly from owner keys and is spendable immediately after creation — no on-chain activation transaction is needed.
+</Info>
+
+<Warning>
+  On Solana, executing a settings-update order (add/remove owner, change threshold) **invalidates all currently pending orders**. Those orders can no longer be signed or executed.
+</Warning>
+
+## Prerequisites
+
+All multisig operations that modify on-chain state require an unlocked v2 wallet session. Obtain a `userRef` and call `unlockWalletSession` before creating, activating, or executing any vault operation.
+
+```typescript
+const userRef = await sdk.getSdkUserId();
+await sdk.unlockWalletSession(userRef, password);
+```
+
+Pass `userRef` to `activateMultisig`, `signOrder`, and `executeOrder` whenever those calls require key material. For organisation-owned vaults, set `walletScope: 'organization'` on create (see the Organization guide).
+
+## Creating a Multisig
+
+`createMultisig` registers the vault in the SDK backend and returns a multisig object including the derived address. For chains that require on-chain activation, the vault is in a `pending` state until you call `activateMultisig`.
+
+```typescript
+import { EChainType } from 'vaults-multichain-sdk';
+
+const multisig = await sdk.createMultisig({
+  chain: EChainType.EVM,
+  owners: ['0x1111...', '0x2222...', '0x3333...'],
+  threshold: 2,
+  chainIds: ['1'], // EVM chain IDs; omit for non-EVM chains
+  userRef,
+  walletScope: 'personal', // or 'organization'
+});
+
+console.log('Multisig address:', multisig.address);
+console.log('Status:', multisig.status); // 'pending' until activated
+```
+
+### Renaming a Vault
+
+Names are not set during creation. Use `updateMultisigName` immediately after creation or at any later point.
+
+```typescript
+await sdk.updateMultisigName({
+  chain: EChainType.EVM,
+  multisigId: multisig.id,
+  name: 'Team Treasury',
+  walletAddress: creatorAddress,
+});
+```
+
+### Deleting a Multisig
+
+Remove a vault record from the SDK using `deleteMultisig`. This does not affect any on-chain contract or balance — it only removes the SDK-side record.
+
+```typescript
+await sdk.deleteMultisig({
+  chain: EChainType.EVM,
+  address: multisig.address,
+});
+```
+
+## Chain-Specific Activation
+
+<AccordionGroup>
+
+  <Accordion title="EVM — Gnosis Safe">
+    EVM multisigs deploy a Gnosis Safe smart contract on-chain. The activation transaction is paid by the `walletAddress` you supply (gas comes from that EOA). You can deploy the same Safe on multiple EVM networks by including multiple `chainIds` at creation.
+
+    ```typescript
+    // Activate — deploys the Gnosis Safe contract
+    const result = await sdk.activateMultisig({
+      chain: EChainType.EVM,
+      multisigId: multisig.id,
+      multisigAddress: multisig.address || '',
+      walletAddress: myWalletAddress,
+      multisig,
+      walletScope: 'personal', // or 'organization'
+      userRef,
+    });
+
+    console.log('Safe deployed at:', result.multisigAddress);
+    ```
+
+    | Detail | Value |
+    |---|---|
+    | Signatures | Off-chain (EIP-712 typed data) |
+    | Execution fee paid by | Executor's personal wallet |
+    | Executor | Any owner once threshold is met |
+    | Order expiration | None |
+  </Accordion>
+
+  <Accordion title="Solana — Squads V4">
+    Activation creates on-chain Squads accounts and requires a small SOL rent deposit (~0.0021 SOL). Use `estimateActivationFee` to fetch the current quoted amount before prompting the user.
+
+    <Note>
+      `estimateActivationFee` currently returns a placeholder value of **0.001**. Use it to pass a `feeQuote` to `activateMultisig`, but rely on the Solana network's live rent calculation for display purposes.
+    </Note>
+
+    ```typescript
+    const feeQuote = await sdk.estimateActivationFee({
+      chain: 'SOL',
+      multisigId: multisig.id,
+    });
+
+    await sdk.activateMultisig({
+      chain: 'SOL',
+      multisigId: multisig.id,
+      multisigAddress: multisig.address || '',
+      walletAddress: myWalletAddress,
+      feeQuote,
+      multisig,
+      walletScope: 'personal',
+    });
+    ```
+
+    | Detail | Value |
+    |---|---|
+    | Signatures | On-chain (each signature is a separate transaction) |
+    | Execution fee paid by | The acting owner |
+    | Order expiration | None (but invalidated by settings changes) |
+  </Accordion>
+
+  <Accordion title="Tron — Native Multisig">
+    Activation converts a regular Tron account into a native multisig account. The multisig address **must hold at least 100 TRX** before you call `activateMultisig`, or the transaction will fail.
+
+    <Note>
+      `estimateActivationFee` currently returns a placeholder value of **0.001** for Tron. Pass it as `feeQuote` to `activateMultisig`. The actual cost is the standard Tron network fee for the activation transaction.
+    </Note>
+
+    ```typescript
+    // ⚠️ Fund the multisig address with 100+ TRX first!
+    const feeQuote = await sdk.estimateActivationFee({
+      chain: 'TRON',
+      multisigId: multisig.id,
+    });
+
+    await sdk.activateMultisig({
+      chain: 'TRON',
+      multisigId: multisig.id,
+      multisigAddress: multisig.address || '',
+      walletAddress: myWalletAddress,
+      feeQuote,
+      multisig,
+      walletScope: 'personal',
+    });
+    ```
+
+    | Detail | Value |
+    |---|---|
+    | Signatures | Off-chain (collected before broadcast) |
+    | Execution fee paid by | Multisig wallet balance |
+    | Order expiration | **23 hours 50 minutes** from first signature |
+
+    <Warning>
+      Tron orders expire **23 hours 50 minutes** after the first signature is collected. If the threshold is not met and the order executed within that window, it transitions to `expired` and must be recreated.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Bitcoin — P2WSH (no activation needed)">
+    Bitcoin P2WSH multisig requires no activation. The address is derived deterministically from the owner public keys and is spendable immediately.
+
+    ```typescript
+    const multisig = await sdk.createMultisig({
+      chain: 'BTC',
+      owners: ['pubkey1...', 'pubkey2...', 'pubkey3...'],
+      threshold: 2,
+      userRef,
+    });
+
+    // Ready to use — no activation step
+    console.log('Bitcoin multisig address:', multisig.address);
+    ```
+
+    | Detail | Value |
+    |---|---|
+    | Signatures | Off-chain (PSBT format) |
+    | Execution fee paid by | Deducted from multisig UTXOs |
+    | Settings updates | ❌ Not available |
+
+    <Warning>
+      Bitcoin multisig settings are immutable. To change owners or threshold, create a new multisig address and sweep funds to it.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Cardano — Native Scripts (no activation needed)">
+    Cardano multisig uses native scripts without Plutus. Like Bitcoin, no activation is required — the script address is derived directly from owner keys.
+
+    ```typescript
+    const multisig = await sdk.createMultisig({
+      chain: 'ADA',
+      owners: ['addr1...', 'addr2...'],
+      threshold: 2,
+      userRef,
+    });
+    ```
+
+    | Detail | Value |
+    |---|---|
+    | Signatures | Off-chain (witnesses) |
+    | Execution fee paid by | Multisig wallet balance |
+    | Order expiration | **72 hours** (TTL) |
+    | Supported assets | ADA, USDM |
+    | Settings updates | ❌ Not available |
+
+    <Info>
+      Cardano follows the EUTXO model. The SDK reserves UTXOs used in pending orders to prevent double-spend conflicts. Each transaction output must include at least **1 ADA** (the minimum UTXO requirement).
+    </Info>
+  </Accordion>
+
+  <Accordion title="XRP — SignerList">
+    XRP activation sets a `SignerList` on the account and disables the master key, transferring full control to the multisig signers. The account must hold at least **1.2 XRP** to cover the base reserve (1 XRP) and the owner reserve added for the SignerList (0.2 XRP).
+
+    ```typescript
+    // Activation requires 1.2+ XRP on the multisig account
+    await sdk.activateMultisig({
+      chain: 'XRP',
+      multisigId: multisig.id,
+      walletAddress: myWalletAddress,
+    });
+    ```
+
+    | Detail | Value |
+    |---|---|
+    | Signatures | Off-chain |
+    | Execution fee paid by | Multisig wallet balance |
+    | Order expiration | **24 hours** |
+    | Parallel orders | ❌ Sequential only |
+
+    <Warning>
+      Once activated, the master key is disabled. All future transactions require the multisig threshold. Keep your owner keys safe — there is no recovery path if keys are lost.
+    </Warning>
+  </Accordion>
+
+</AccordionGroup>
+
+## Getting Multisig Info
+
+### List by Wallet
+
+Use `getMultisigs` to retrieve all vaults associated with a specific wallet address on a given chain.
+
+```typescript
+// All multisigs visible to a wallet address on a given chain
+const multisigs = await sdk.getMultisigs({
+  chain: EChainType.EVM,
+  walletAddress: myWalletAddress, // optional filter
+});
+
+multisigs.forEach(m => {
+  console.log(`${m.name} — ${m.address} — ${m.status}`);
+});
+```
+
+### List All Multisigs on a Chain
+
+Use `getMultisigsByChain` to retrieve all vaults across a chain type, regardless of wallet.
+
+```typescript
+const allMultisigs = await sdk.getMultisigsByChain({
+  chain: EChainType.EVM,
+});
+
+allMultisigs.forEach(m => {
+  console.log(`${m.name} — ${m.address}`);
+});
+```
+
+### Get by Address
+
+Use `getMultisig` to look up a specific vault by its on-chain address.
+
+```typescript
+const multisig = await sdk.getMultisig({
+  chain: EChainType.EVM,
+  address: multisigAddress,
+});
+
+console.log('Threshold:', multisig.threshold);
+console.log('Owners:', multisig.owners.map(o => o.walletAddress));
+```
+
+## Managing Settings
+
+<Note>
+  Owner and threshold management is supported on **EVM**, **Solana**, and **Tron** only. Bitcoin and Cardano multisig settings cannot be changed after creation.
+</Note>
+
+Settings changes go through the standard order flow — you create a settings order, collect threshold signatures, and execute it. Use `createSettingsOrder` for all three operations.
+
+<CodeGroup>
+
+```typescript Add an Owner
+await sdk.createSettingsOrder({
+  multisigId: multisig.id,
+  multisig: multisig,
+  walletAddress: myWalletAddress,
+  newOwners: [
+    ...multisig.owners.map(o => o.walletAddress),
+    '0x4444...', // new owner
+  ],
+});
+```
+
+```typescript Remove an Owner
+await sdk.createSettingsOrder({
+  multisigId: multisig.id,
+  multisig: multisig,
+  walletAddress: myWalletAddress,
+  newOwners: multisig.owners
+    .map(o => o.walletAddress)
+    .filter(addr => addr !== '0x1111...'), // owner to remove
+});
+```
+
+```typescript Change Threshold
+await sdk.createSettingsOrder({
+  multisigId: multisig.id,
+  multisig: multisig,
+  walletAddress: myWalletAddress,
+  newOwners: multisig.owners.map(o => o.walletAddress),
+  newThreshold: 3,
+});
+```
+
+</CodeGroup>
+
+## Transaction History
+
+Fetch a paginated log of all executed and pending orders for a vault.
+
+```typescript
+const history = await sdk.getMultisigTxHistory({
+  multisigId: multisig.id,
+  page: 1,
+  limit: 20,
+});
+
+history.orders.forEach(order => {
+  console.log(`${order.method}: ${order.status}`);
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Orders" icon="clipboard-check" href="/sdk-guide/orders">
+    Learn how to create, sign, execute, and reject multisig transactions.
+  </Card>
+  <Card title="Network Fees" icon="coins" href="/sdk-guide/multisig-fees">
+    Understand who pays for each on-chain action and how costs vary by chain.
+  </Card>
+</CardGroup>

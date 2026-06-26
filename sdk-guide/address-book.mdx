@@ -1,0 +1,348 @@
+---
+title: "Cowchain SDK Address Book: Save and Validate Addresses"
+sidebarTitle: "Address Book"
+description: "Store and organise recipient addresses with memo support, enforce safe-send policies via Force Address Book, and validate addresses before every transfer."
+---
+
+The Cowchain Address Book lets you persist recipient addresses alongside their chain type, a human-readable name, and an optional memo (destination tag or reference string). Instead of asking users to re-enter an address for every transaction, you save it once and look it up at send time. When your organisation enables **Force Address Book**, the SDK will reject any outbound transfer whose destination is not already saved — giving you a lightweight allow-list without custom backend logic.
+
+---
+
+## Address Types
+
+Every entry in the address book carries a `type` field that classifies the recipient.
+
+| Type     | Description                                                        |
+| -------- | ------------------------------------------------------------------ |
+| `Wallet` | A regular self-custody or hardware wallet address                  |
+| `CEX`    | A centralised exchange deposit address (Binance, Coinbase, etc.)   |
+
+<Info>
+  The `type` classification tells your UI whether to prompt for a memo before sending. CEX addresses almost always require a memo or destination tag so that the exchange can credit the correct user account.
+</Info>
+
+---
+
+## Creating Entries
+
+### Basic entry
+
+```typescript
+const entry = await sdk.createAddressBookEntry({
+  name: 'Alice Wallet',
+  address: '0x5b927c461b71Ce25a74878dBe504492Ab80cbeE4',
+  chainType: 'EVM',
+  type: 'Wallet',
+});
+
+console.log('Saved:', entry.id, entry.name);
+```
+
+### Entry with memo
+
+For chains that support memos or destination tags, include the optional `memo` field at creation time so it is always available when you retrieve the entry.
+
+<CodeGroup>
+
+```typescript XRP (destination tag)
+const xrpEntry = await sdk.createAddressBookEntry({
+  name: 'Binance XRP',
+  address: 'rN7n7otQDd6FczFgLdlqtyMVrRP3Jtxys',
+  chainType: 'XRP',
+  type: 'CEX',
+  memo: '123456789',
+});
+```
+
+```typescript Solana (memo string)
+const solEntry = await sdk.createAddressBookEntry({
+  name: 'Exchange SOL',
+  address: '5ZWj7a1f8tWkjBESHKgrLmXgEPXhRNMPE3m6tmFH4P6A',
+  chainType: 'SOL',
+  type: 'CEX',
+  memo: 'user-deposit-ref',
+});
+```
+
+```typescript Tron (memo string)
+const tronEntry = await sdk.createAddressBookEntry({
+  name: 'Exchange TRX',
+  address: 'TQCfX8tqKe5w8cUgBvUFV8nqVEJqHJbTBm',
+  chainType: 'TRON',
+  type: 'CEX',
+  memo: '8827361',
+});
+```
+
+</CodeGroup>
+
+<Warning>
+  Each address can only be saved once per chain type. Attempting to create a duplicate entry returns a **409 Conflict** error. Use `getAddressBookEntries` to check for an existing entry before creating one.
+</Warning>
+
+---
+
+## Getting Entries
+
+### List all entries
+
+```typescript
+const entries = await sdk.getAddressBookEntries();
+
+entries.forEach(entry => {
+  console.log(`${entry.name}: ${entry.address} (${entry.chainType})`);
+});
+```
+
+### Filter by chain type
+
+```typescript
+const evmEntries = await sdk.getAddressBookEntries({
+  chainType: 'EVM',
+});
+```
+
+### Filter by address type
+
+```typescript
+const cexEntries = await sdk.getAddressBookEntries({
+  type: 'CEX',
+});
+```
+
+### Combined filters
+
+```typescript
+const solCexEntries = await sdk.getAddressBookEntries({
+  chainType: 'SOL',
+  type: 'CEX',
+});
+```
+
+---
+
+## Updating Entries
+
+You can update the `name`, the `memo`, or both in a single call.
+
+```typescript
+// Update name only
+const updated = await sdk.updateAddressBookEntry({
+  id: entry.id,
+  name: 'Alice Main Wallet',
+});
+
+// Update memo only
+const updated = await sdk.updateAddressBookEntry({
+  id: entry.id,
+  memo: '999888777',
+});
+
+// Update both at once
+const updated = await sdk.updateAddressBookEntry({
+  id: entry.id,
+  name: 'New Exchange Account',
+  memo: '111222333',
+});
+```
+
+### Clear a memo
+
+Set `memo` to `null` to remove an existing memo from an entry.
+
+```typescript
+const updated = await sdk.updateAddressBookEntry({
+  id: entry.id,
+  memo: null,
+});
+
+console.log(updated.memo); // null
+```
+
+<Info>
+  At least one of `name` or `memo` must be provided in every update call. Passing neither field returns a **400 Bad Request** error.
+</Info>
+
+---
+
+## Deleting Entries
+
+```typescript
+await sdk.deleteAddressBookEntry({ id: entry.id });
+```
+
+<Warning>
+  When **Force Address Book** is enabled, deleting an entry immediately revokes the ability to send funds to that address. The address must be re-added before any new transaction targeting it will be accepted.
+</Warning>
+
+---
+
+## Address Type Lookup
+
+Use `getAddressType` to check whether a given address is already in the address book and to learn its classification before initiating a transfer.
+
+```typescript
+const result = await sdk.getAddressType({
+  chainType: 'EVM',
+  address: '0x5b927c461b71Ce25a74878dBe504492Ab80cbeE4',
+});
+
+console.log(result);
+// {
+//   type: 'Wallet',         // 'CEX', 'Wallet', or null
+//   isInAddressBook: true,  // exists in your address book
+//   isOnlyExist: false,     // Force Address Book enabled?
+// }
+```
+
+### Response fields
+
+<ResponseField name="type" type="'CEX' | 'Wallet' | null">
+  The classified type of the address. Returns `null` when the address is not present in the address book.
+</ResponseField>
+
+<ResponseField name="isInAddressBook" type="boolean">
+  `true` when the address has a saved entry in your address book; `false` otherwise.
+</ResponseField>
+
+<ResponseField name="isOnlyExist" type="boolean">
+  `true` when the **Force Address Book** policy is active for this account. When `true`, every transaction recipient must be in the address book.
+</ResponseField>
+
+---
+
+## Force Address Book
+
+When an organisation admin enables **Force Address Book**, every outbound transaction must target an address already saved in the sender's address book. This applies to both wallet `sendTransaction` calls and multisig `createOrder` / `createSendOrder` operations, across all supported chains.
+
+If the destination is not found, the API returns:
+
+```
+400 Bad Request: "Destination address must be in your Address Book: <address>"
+```
+
+<Tip>
+  Call `getAddressType` before every send. If `isOnlyExist` is `true` and `isInAddressBook` is `false`, prompt the user to save the address first — see the [Recommended Flow](#recommended-flow) below.
+</Tip>
+
+---
+
+## Organisation Address Book
+
+When using the Organisation SDK, listing address book entries returns all corporate rows — including entries that are still pending email OTP verification. Each row includes an `isVerified` field.
+
+<Info>
+  Only entries with **`isVerified: true`** satisfy organisation-level Force Address Book checks for outbound transfers. Treat `isVerified: false` rows as metadata-only until the user completes OTP verification, or until the row was added via an API key that grants auto-verification.
+</Info>
+
+To update a corporate entry's display label, memo, type, or Travel Rule fields, call the organisation address book update endpoint using a Master account that holds the `AddressBookManagement` permission. Note that `address` and `chainType` are **immutable** after an entry is created.
+
+---
+
+## Recommended Flow
+
+Combine `getAddressType` with your send logic to handle Force Address Book gracefully and give users a clear call to action.
+
+<Steps>
+  <Step title="Check the address">
+    ```typescript
+    const check = await sdk.getAddressType({
+      chainType: 'EVM',
+      address: recipientAddress,
+    });
+    ```
+  </Step>
+  <Step title="Prompt to save if required">
+    ```typescript
+    if (check.isOnlyExist && !check.isInAddressBook) {
+      const entry = await sdk.createAddressBookEntry({
+        name: 'New Recipient',
+        address: recipientAddress,
+        chainType: 'EVM',
+        type: 'Wallet',
+      });
+      console.log('Added to address book:', entry.id);
+    }
+    ```
+  </Step>
+  <Step title="Proceed with the transaction">
+    ```typescript
+    const result = await sdk.sendTransaction({
+      chain: 'EVM',
+      from: senderAddress,
+      to: recipientAddress,
+      amount: '0.5',
+      chainId: 1,
+      tokenAddress: '',
+      decimals: 18,
+      isNativeToken: true,
+    });
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Memo Support
+
+Memos — also called destination tags or reference strings — let blockchains and exchanges route a transaction to the correct user account when many users share a single deposit address. Always store the memo alongside the address so your UI can pre-populate it automatically.
+
+### Chain comparison
+
+| Chain | Memo field name     | Format  | Typical use                  |
+| ----- | ------------------- | ------- | ----------------------------- |
+| XRP   | Destination Tag     | Numeric | CEX deposit routing           |
+| SOL   | Memo                | String  | Exchange reference, indexing  |
+| TRON  | Memo                | String  | CEX deposit routing           |
+
+### Passing memo in a transaction
+
+Include `memo` in `sendTransaction` (wallet) or `createSendOrder` (multisig) when the recipient requires it.
+
+<CodeGroup>
+
+```typescript sendTransaction (wallet)
+const result = await sdk.sendTransaction({
+  chain: 'XRP',
+  from: senderAddress,
+  to: recipientAddress,
+  amount: '50',
+  memo: '123456789',
+  tokenAddress: '',
+  decimals: 6,
+  isNativeToken: true,
+});
+```
+
+```typescript createSendOrder (multisig)
+const order = await sdk.createSendOrder({
+  multisigId: multisig.id,
+  walletAddress: myWalletAddress,
+  to: recipientAddress,
+  amount: '100',
+  chainId: '1',
+  memo: '123456789',
+});
+```
+
+</CodeGroup>
+
+### Chain-specific memo behaviour
+
+<AccordionGroup>
+  <Accordion title="XRP — Destination Tag">
+    XRP uses a numeric **Destination Tag** to route funds to the correct account on an exchange. The tag is an unsigned 32-bit integer (0 to 4,294,967,295). Most exchanges require a destination tag for XRP deposits. Sending without the correct tag may result in funds being credited to the wrong account or held in limbo until you contact support.
+  </Accordion>
+
+  <Accordion title="Solana — Memo string">
+    Solana memos are arbitrary strings attached to transactions via the SPL Memo program. Exchanges use them as deposit references to match an inbound transfer to a user account. The memo is included as a separate instruction in the transaction and is visible on-chain.
+  </Accordion>
+
+  <Accordion title="Tron — Memo string">
+    Tron supports string-based memos attached to TRX and TRC-20 transfers. Exchanges use them for deposit identification. The memo is stored in the transaction data field and is publicly visible on the Tron network.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+  Always verify memo requirements with the recipient exchange before sending. Sending to a CEX deposit address without the required memo may cause funds to be lost or significantly delayed — recovery typically requires opening a manual support ticket with the exchange.
+</Warning>

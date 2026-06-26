@@ -1,0 +1,8 @@
+---
+openapi: post /sdk/wallets/prices
+title: "Retrieve the Latest USD Prices for Multiple Tokens"
+sidebarTitle: "Token Prices"
+description: "POST /sdk/wallets/prices - Accepts a list of token identifiers and returns the latest USD market price for each token in a single batched response."
+---
+
+Fetch the latest USD prices for one or more tokens in a single request. Provide an array of token identifiers (chain type, chain, and contract address) in the JSON request body. The response maps each identifier to its current market price, suitable for real-time portfolio valuation.

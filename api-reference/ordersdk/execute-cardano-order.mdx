@@ -1,0 +1,8 @@
+---
+openapi: patch /sdk/order/execute/ada
+title: "Execute a Fully Signed Cardano ADA Multisig Order"
+sidebarTitle: "Execute Cardano Order"
+description: "PATCH /sdk/order/execute/ada — Submits a fully signed Cardano ADA multisig order on-chain and returns the resulting transaction hash."
+---
+
+Use this endpoint to execute a Cardano ADA order that has collected all required multisig signatures. The API finalizes the transaction body with the gathered witnesses and submits it to the Cardano network, returning the on-chain transaction hash and updating the order status to executed.

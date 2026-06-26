@@ -1,0 +1,8 @@
+---
+title: "Update an Existing Address Book Entry by Record ID"
+sidebarTitle: "Update Entry"
+description: "PATCH /sdk/address-book/{id} — Update an existing address book entry by its ID, modifying the contact name, blockchain address, or chain type as needed."
+openapi: patch /sdk/address-book/{id}
+---
+
+Update an existing address book entry by its unique identifier. Provide the entry ID as a path parameter and include the fields to update — such as display name, blockchain address, or chain type — in the request body. Only supplied fields are modified.

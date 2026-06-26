@@ -1,0 +1,8 @@
+---
+openapi: post /sdk/wallets/update
+title: "Update the MPC Key Shares Associated with a Wallet"
+sidebarTitle: "Update Shares"
+description: "POST /sdk/wallets/update - Replaces the MPC key shares for a wallet with new client and server share material; used during key-refresh operations."
+---
+
+Replace the MPC key shares associated with an existing wallet. This endpoint is used during key-refresh or re-share operations. Supply the wallet address together with the new encrypted client and server key-share material in the request body. On success the wallet record is updated with the new shares.

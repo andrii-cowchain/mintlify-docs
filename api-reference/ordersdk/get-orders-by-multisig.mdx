@@ -1,0 +1,8 @@
+---
+openapi: get /sdk/order/{id}
+title: "List All Orders Associated with a Multisig Address"
+sidebarTitle: "List Orders"
+description: "GET /sdk/order/{id} — Retrieves all orders associated with a given multisig address ID, returning a list of order records and their current statuses."
+---
+
+Use this endpoint to list all orders linked to a specific multisig address. Provide the multisig `id` as a path parameter and the API returns a paginated collection of order records — including each order's status, chain, amounts, and signature progress — for that multisig wallet.

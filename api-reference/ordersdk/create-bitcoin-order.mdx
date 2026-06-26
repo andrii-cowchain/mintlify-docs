@@ -1,0 +1,8 @@
+---
+openapi: post /sdk/order/create/btc
+title: "Create a New Bitcoin Multisig Order via the Order SDK"
+sidebarTitle: "Create Bitcoin Order"
+description: "POST /sdk/order/create/btc — Creates a new Bitcoin multisig order, returning the order record with its ID and pending-signature status."
+---
+
+Use this endpoint to initiate a new order on the Bitcoin network through the Order SDK. Submit the required UTXO-based transaction parameters and the API will register the order, assign it a unique ID, and queue it for the required multisig signing steps before broadcast.

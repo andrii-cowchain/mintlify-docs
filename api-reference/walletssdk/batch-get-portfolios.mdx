@@ -1,0 +1,8 @@
+---
+openapi: post /sdk/wallets/portfolio
+title: "Batch Retrieve Token Portfolios for Multiple Wallets"
+sidebarTitle: "Batch Portfolios"
+description: "POST /sdk/wallets/portfolio - Accepts a list of wallet identifiers and returns portfolio data for each wallet in a single batched response."
+---
+
+Retrieve token portfolios for multiple wallets in a single request. Submit an array of wallet identifiers — each specifying `chainType`, `chain`, and `walletAddress` — in the request body. The endpoint returns portfolio data for every wallet in the list, reducing the number of round-trips needed for multi-wallet dashboards.

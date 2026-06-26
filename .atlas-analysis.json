@@ -1,0 +1,232 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Cowchain",
+  "projectDescription": "Cowchain (vaults-multichain-sdk / TrustodianSDK) is a TypeScript SDK for server-side integrators that enables non-custodial multi-chain wallet management, multisig vaults, and transaction workflows using 2-of-3 Shamir secret sharing.",
+  "theme": "luma",
+  "primaryColor": "#341c5d",
+  "lightColor": "#9c8caa",
+  "darkColor": "#dfd9e5",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "SDK Guide",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "sdk-guide/introduction",
+              "sdk-guide/authentication",
+              "sdk-guide/key-management"
+            ]
+          },
+          {
+            "group": "Wallets",
+            "pages": [
+              "sdk-guide/wallets",
+              "sdk-guide/address-book"
+            ]
+          },
+          {
+            "group": "Multisig",
+            "pages": [
+              "sdk-guide/multisig",
+              "sdk-guide/orders",
+              "sdk-guide/multisig-fees"
+            ]
+          },
+          {
+            "group": "Organization",
+            "pages": [
+              "sdk-guide/organization"
+            ]
+          },
+          {
+            "group": "Help",
+            "pages": [
+              "sdk-guide/faq"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          },
+          {
+            "group": "Wallets",
+            "pages": [
+              "api-reference/walletssdk/get-all-user-wallets",
+              "api-reference/walletssdk/get-user-wallets-with-pagination",
+              "api-reference/walletssdk/create-wallet",
+              "api-reference/walletssdk/get-wallet-by-address",
+              "api-reference/walletssdk/update-wallet-name",
+              "api-reference/walletssdk/delete-wallet",
+              "api-reference/walletssdk/get-wallet-portfolio",
+              "api-reference/walletssdk/batch-get-portfolios",
+              "api-reference/walletssdk/get-total-asset-value",
+              "api-reference/walletssdk/get-supported-tokens",
+              "api-reference/walletssdk/get-token-prices",
+              "api-reference/walletssdk/get-wallet-utxos",
+              "api-reference/walletssdk/get-crypto-share-client-key-share",
+              "api-reference/walletssdk/get-server-share-server-key-share",
+              "api-reference/walletssdk/update-wallet-shares",
+              "api-reference/walletssdk/get-recovery-public-key",
+              "api-reference/walletssdk/get-pk-export-check",
+              "api-reference/walletssdk/get-pk-import-check"
+            ]
+          },
+          {
+            "group": "Multisig",
+            "pages": [
+              "api-reference/multisigsdk/get-user-multisigs-by-wallet",
+              "api-reference/multisigsdk/get-user-multisigs-by-chain-type",
+              "api-reference/multisigsdk/get-multisig-by-address",
+              "api-reference/multisigsdk/create-evm-multisig",
+              "api-reference/multisigsdk/create-solana-multisig",
+              "api-reference/multisigsdk/create-bitcoin-multisig",
+              "api-reference/multisigsdk/create-tron-multisig",
+              "api-reference/multisigsdk/create-cardano-multisig",
+              "api-reference/multisigsdk/create-xrp-multisig",
+              "api-reference/multisigsdk/deploy-evm-multisig",
+              "api-reference/multisigsdk/deploy-solana-multisig",
+              "api-reference/multisigsdk/deploy-tron-multisig",
+              "api-reference/multisigsdk/get-solana-deploy-transaction",
+              "api-reference/multisigsdk/share-tron-multisig-key",
+              "api-reference/multisigsdk/share-xrp-multisig",
+              "api-reference/multisigsdk/share-solana-multisig-key",
+              "api-reference/multisigsdk/execution-xrp-multisig",
+              "api-reference/multisigsdk/update-multisig-name",
+              "api-reference/multisigsdk/delete-multisig"
+            ]
+          },
+          {
+            "group": "Orders",
+            "pages": [
+              "api-reference/ordersdk/create-evm-order",
+              "api-reference/ordersdk/create-solana-order",
+              "api-reference/ordersdk/activate-solana-order",
+              "api-reference/ordersdk/create-bitcoin-order",
+              "api-reference/ordersdk/create-tron-order",
+              "api-reference/ordersdk/create-cardano-order",
+              "api-reference/ordersdk/create-xrp-order",
+              "api-reference/ordersdk/get-solana-order-parameters",
+              "api-reference/ordersdk/get-tron-transaction-data",
+              "api-reference/ordersdk/get-xrp-transaction-data",
+              "api-reference/ordersdk/get-ada-utxos",
+              "api-reference/ordersdk/send-ada-order",
+              "api-reference/ordersdk/sign-evm-order",
+              "api-reference/ordersdk/sign-solana-order",
+              "api-reference/ordersdk/sign-bitcoin-order",
+              "api-reference/ordersdk/sign-tron-order",
+              "api-reference/ordersdk/sign-xrp-order",
+              "api-reference/ordersdk/sign-ada-order",
+              "api-reference/ordersdk/reject-evm-order",
+              "api-reference/ordersdk/reject-solana-order",
+              "api-reference/ordersdk/reject-bitcoin-order",
+              "api-reference/ordersdk/reject-tron-order",
+              "api-reference/ordersdk/reject-xrp-order",
+              "api-reference/ordersdk/reject-ada-order",
+              "api-reference/ordersdk/execute-evm-order",
+              "api-reference/ordersdk/execute-solana-order",
+              "api-reference/ordersdk/execute-bitcoin-order",
+              "api-reference/ordersdk/execute-tron-order",
+              "api-reference/ordersdk/execute-xrp-order",
+              "api-reference/ordersdk/execute-cardano-order",
+              "api-reference/ordersdk/deactivate-order",
+              "api-reference/ordersdk/get-orders-by-multisig",
+              "api-reference/ordersdk/get-order-by-id",
+              "api-reference/ordersdk/delete-order"
+            ]
+          },
+          {
+            "group": "History",
+            "pages": [
+              "api-reference/historysdk/get-wallet-history",
+              "api-reference/historysdk/get-all-multisigs-history",
+              "api-reference/historysdk/get-multisig-history-by-id"
+            ]
+          },
+          {
+            "group": "Address Book",
+            "pages": [
+              "api-reference/addressbooksdk/create-address-book-entry",
+              "api-reference/addressbooksdk/get-address-book-entries",
+              "api-reference/addressbooksdk/get-address-type",
+              "api-reference/addressbooksdk/update-address-book-entry",
+              "api-reference/addressbooksdk/delete-address-book-entry"
+            ]
+          },
+          {
+            "group": "Organization",
+            "pages": [
+              "api-reference/organizationsdk/get-organization-me",
+              "api-reference/organizationsdk/get-organization-team",
+              "api-reference/organizationsdk/post-organization-team-invite",
+              "api-reference/organizationsdk/post-organization-team-member-wallets",
+              "api-reference/organizationsdk/post-organization-team-provision",
+              "api-reference/organizationsdk/post-organization-wallets-accept",
+              "api-reference/organizationsdk/delete-organization-team-member-wallet",
+              "api-reference/organizationsdk/delete-organization-team-member"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Non-custodial 2-of-3 Shamir secret sharing — private keys never stored whole on any server",
+    "Multi-chain support: EVM, Solana, Tron, Bitcoin, Cardano, and XRP",
+    "Multisig vault creation, activation, and lifecycle management per chain",
+    "Multi-step order workflows: create, sign (threshold), execute, and reject",
+    "Organization B2B features: team wallets, vault provisioning, spending limits, and audit logs",
+    "Address book with Force Address Book enforcement and memo/destination-tag support",
+    "Portfolio and balance tracking across all supported chains",
+    "TypeScript-first SDK with OPRF-based wallet-password sessions and async context helpers"
+  ],
+  "publicApiSurface": [
+    "TrustodianSDK (class)",
+    "InMemoryShareStore / IntegratorShareStore (interface)",
+    "EChainType (enum)",
+    "sdk.getSdkUserId()",
+    "sdk.setWalletPassword({ userRef, password })",
+    "sdk.unlockWalletSession(userRef, password)",
+    "sdk.lockWalletSession(userRef)",
+    "sdk.runWithUserRef(userRef, fn)",
+    "sdk.createWallet({ chain, userRef, password, mode })",
+    "sdk.importWallet({ chain, privateKey, userRef, password })",
+    "sdk.getWallets({ page, limit, chainTypes })",
+    "sdk.getWallet({ chain, address })",
+    "sdk.sendTransaction({ chain, from, to, amount, chainId, ... })",
+    "sdk.getPortfolio({ chain, address, chainId })",
+    "sdk.getWalletsPortfolio([...])",
+    "sdk.getTotalAssetValue()",
+    "sdk.getWalletHistory({ chain, walletAddress, page, limit })",
+    "sdk.estimateFee({ chain, txType, payload, chainId })",
+    "sdk.exportWallet({ userRef, chain, address, format })",
+    "sdk.deleteWallet({ chain, address })",
+    "sdk.updateWalletName({ chain, address, name })",
+    "sdk.createMultisig({ chain, owners, threshold, chainIds, userRef, walletScope })",
+    "sdk.activateMultisig({ chain, multisigId, multisigAddress, walletAddress, ... })",
+    "sdk.updateMultisigName({ chain, multisigId, name, walletAddress })",
+    "sdk.createOrder({ chain, multisigId, walletAddress, method, instructions, ... })",
+    "sdk.signOrder({ chain, orderId, walletAddress, multisigId, ... })",
+    "sdk.executeOrder({ chain, orderId, walletAddress, multisigId, ... })",
+    "sdk.rejectOrder({ chain, orderId, walletAddress, multisigId, ... })",
+    "sdk.createAddressBookEntry({ name, address, chainType, type, memo })",
+    "sdk.getAddressBookEntries({ chainType, type })",
+    "sdk.updateAddressBookEntry({ id, name, memo })",
+    "sdk.deleteAddressBookEntry({ id })",
+    "sdk.getAddressType({ chainType, address })",
+    "sdk.getOrgMe()",
+    "sdk.listOrgWallets()",
+    "sdk.createOrgWallet({ chain, userRef, password, mode })",
+    "sdk.provisionOrgMemberWalletAccess(masterUserRef, { memberId, walletId, ... })",
+    "sdk.acceptOrgWalletAccessWithPassword(employeeUserRef, { walletId, ... })",
+    "sdk.getOrgAuditLogs({ page, limit })"
+  ]
+}

@@ -1,0 +1,132 @@
+---
+title: "Cowchain Multisig Network Fees for All Blockchains"
+sidebarTitle: "Network Fees"
+description: "Compare on-chain vs off-chain costs for multisig actions, who pays each fee, and estimated amounts for EVM, Solana, Tron, Bitcoin, Cardano, and XRP."
+---
+
+Before you deploy a multisig vault in production, you should understand what goes on-chain (and costs money) versus what stays off-chain (and is free). Cowchain minimises unnecessary on-chain activity — most chains allow signing and rejection to happen entirely off-chain — but activation and execution always touch the network. Fee responsibility also differs: on some chains the *executor* pays from their own wallet, while on others fees come directly from the *multisig balance*.
+
+## At a Glance
+
+| Network | Action | Type | Paid By | Estimated Cost |
+|---|---|---|---|---|
+| **EVM** | Create / Sign / Reject | Off-chain | — | Free |
+| | Execute | On-chain | Executor | ~0.00008 ETH (Base) |
+| **Tron** | Create / Sign / Reject | Off-chain | — | Free |
+| | Execute (transfer) | On-chain | Multisig balance | Standard bandwidth + energy |
+| | Execute (settings update) | On-chain | Multisig balance | Network fee + **100 TRX** |
+| **Bitcoin** | Create / Sign / Reject | Off-chain | — | Free |
+| | Execute | On-chain | Multisig UTXOs | Fee baked into PSBT at creation |
+| **Solana** | Create / Sign / Reject | On-chain | Acting owner | ~0.000005 SOL each |
+| | Execute | On-chain | Acting owner | ~0.000005 SOL |
+| **Cardano** | Create / Sign / Reject | Off-chain | — | Free |
+| | Execute | On-chain | Multisig balance | 0.2 – 0.4 ADA |
+| **XRP** | Create / Sign / Reject | Off-chain | — | Free |
+| | Execute | On-chain | Multisig balance | `(1 + signers) × 10 drops` |
+
+## EVM — Gnosis Safe
+
+EVM multisigs use Gnosis Safe, and the key fee property is that **only execution is on-chain**. Creating an order, collecting EIP-712 signatures, and rejecting are all free off-chain actions. Once threshold is met and an owner calls `executeOrder`, the executor's personal EOA broadcasts the transaction and pays gas.
+
+- **Signing / Rejection** — off-chain, no gas, always free.
+- **Execution** — on-chain; gas paid by the executing owner's wallet, not the Safe.
+- **Cost on Base** — approximately **0.000080 ETH** per execution. The order type (token transfer vs. settings update) does not significantly change this figure.
+- **Gas varies by network** — Ethereum mainnet will be higher; low-cost L2s (Base, Polygon, Arbitrum) will be lower.
+
+<Note>
+  Ensure the wallet you use to call `executeOrder` holds enough native currency to cover gas. If you prefer a different wallet to execute, that is allowed — any owner can execute once the threshold is met.
+</Note>
+
+## Tron — Native Multisig
+
+Tron uses its native account permission system. Like EVM, signing is off-chain and free, but **execution fees are deducted from the multisig wallet itself**, not the caller.
+
+- **Transfer orders** — consume standard Tron bandwidth and energy. The exact cost depends on the resource utilisation of the account at execution time.
+- **Settings update orders** — adding or removing owners, or changing the threshold, incurs the standard network fee **plus a fixed 100 TRX** charged by the protocol.
+- **Activation** — requires the multisig address to hold at least **100 TRX** before you call `activateMultisig`.
+- **Expiry** — orders expire **23 hours 50 minutes** after the first signature, so execution must happen within that window.
+
+## Bitcoin — P2WSH
+
+Bitcoin's fee model is baked in at order creation time. The fee rate is determined when the PSBT is assembled, so there are no surprises at execution.
+
+- **Create / Sign / Reject** — handled off-chain using PSBT format, always free.
+- **Execution** — the finalised PSBT is broadcast and the fee is deducted from the UTXOs that make up the transaction inputs (i.e., the multisig's own funds).
+- **Fee amount** — set during order creation based on the current mempool fee rate. You will see the fee deducted from the output amount before signing.
+- **Settings changes** — not available. Creating a new multisig and transferring funds is the only migration path.
+
+## Solana — Squads V4
+
+Solana is the outlier: **every action is on-chain**, including creating and signing proposals. Each step is a separate transaction and the acting owner pays the base Solana network fee.
+
+- **Create, sign, reject, execute** — all on-chain; each costs approximately **0.000005 SOL** (the base transaction fee).
+- **Paid by** — the owner performing the action, from their personal wallet.
+- **Activation** — also on-chain and requires a rent-exempt SOL deposit of approximately **0.0021 SOL** to fund the Squads account storage.
+- **Settings updates** — supported, but executing one invalidates all currently pending orders.
+
+<Info>
+  Because each action is an independent on-chain transaction, the total cost for a full 2-of-3 sign-and-execute flow (create + 2 signs + execute) is roughly **0.00002 SOL** — negligible at current prices, but worth budgeting for high-volume applications.
+</Info>
+
+## Cardano — Native Scripts
+
+Cardano uses off-chain witness collection, so only the final broadcast costs anything.
+
+- **Create / Sign / Reject** — off-chain, free.
+- **Execution** — the assembled transaction is broadcast to the network; the fee comes from the multisig wallet balance.
+- **Typical fee** — between **0.2 and 0.4 ADA**, depending on transaction size in bytes.
+- **Minimum UTXO** — each transaction output must carry at least **1 ADA** (the protocol's minimum UTXO requirement). This is not a fee but does affect available balance.
+- **Expiry** — all orders carry a 72-hour TTL; an expired order must be recreated before any fee is incurred.
+
+## XRP — SignerList
+
+XRP fees are drop-based and scale with the number of signers on the transaction.
+
+- **Signing / Rejection** — off-chain, free.
+- **Base fee** — **10 drops** (0.00001 XRP) per transaction, paid from the multisig account balance.
+- **Multisig fee formula** — `(1 + numberOfSignatures) × 10 drops`. A 2-of-3 multisig paying with 2 signatures costs `(1 + 2) × 10 = 30 drops`.
+- **Reserve requirements** — the account must maintain a **base reserve of 1 XRP** at all times. Adding a `SignerList` during activation adds an **owner reserve of 0.2 XRP**, bringing the total locked reserve to **1.2 XRP**.
+- **Activation cost** — adds 0.2 XRP to the required reserve. The funds are not spent but are locked as long as the SignerList exists.
+- **Order expiry** — 24 hours based on ledger sequence. Orders that expire without execution do not incur any fee.
+
+## Fee Estimation Methods
+
+The SDK exposes two helpers for estimating fees before committing to an on-chain action.
+
+```typescript
+// Estimate the cost to activate a multisig
+const activationFee = await sdk.estimateActivationFee({
+  chain: 'SOL',
+  multisigId: multisig.id,
+});
+
+// Estimate the cost to execute an order
+const executionFee = await sdk.estimateOrderExecutionFee({
+  chain: 'EVM',
+  orderId: order.id,
+  walletAddress: myWalletAddress,
+  chainId: '1',
+});
+
+console.log(`Activation fee: ${activationFee.estimatedFee} ${activationFee.currency}`);
+console.log(`Execution fee:  ${executionFee.estimatedFee} ${executionFee.currency}`);
+```
+
+<Warning>
+  Both `estimateActivationFee` and `estimateOrderExecutionFee` currently return a **placeholder value of 0.001**. Pass the result to `activateMultisig` or `executeOrder` as a `feeQuote`, but do not display this figure to end users as an accurate cost estimate — use chain-specific live data for user-facing fee displays.
+</Warning>
+
+<Tip>
+  On **Tron** and **Bitcoin**, execution fees come directly from the multisig vault's balance — not from any individual owner. Always ensure the vault holds enough native currency (TRX or BTC) to cover the next execution before collecting signatures. On Tron, also account for the extra **100 TRX** if a settings update order is in flight.
+</Tip>
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="Multisig Vaults" icon="users" href="/sdk-guide/multisig">
+    Create, activate, and manage threshold-signing vaults on all supported chains.
+  </Card>
+  <Card title="Orders" icon="clipboard-check" href="/sdk-guide/orders">
+    Propose, sign, execute, and reject multisig transactions.
+  </Card>
+</CardGroup>

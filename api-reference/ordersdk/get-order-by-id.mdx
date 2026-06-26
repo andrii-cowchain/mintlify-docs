@@ -1,0 +1,8 @@
+---
+openapi: get /sdk/order/data/{id}
+title: "Retrieve the Full Details of a Single Order by ID"
+sidebarTitle: "Get Order"
+description: "GET /sdk/order/data/{id} — Retrieves the full details of a single multisig order by its unique ID, including status, chain, amounts, and signatures."
+---
+
+Use this endpoint to fetch the complete record of a specific order. Provide the order `id` as a path parameter and the API returns all available details — including the order's current status, target chain, transaction parameters, signer list, and collected signatures.

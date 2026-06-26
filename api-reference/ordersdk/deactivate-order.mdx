@@ -1,0 +1,8 @@
+---
+openapi: post /sdk/order/deactivation
+title: "Deactivate an Active Multisig Order via the Order SDK"
+sidebarTitle: "Deactivate Order"
+description: "POST /sdk/order/deactivation — Deactivates an active multisig order, halting further signing or execution and transitioning it to an inactive state."
+---
+
+Use this endpoint to deactivate a currently active order. Once deactivated, the order can no longer receive new signatures or be executed until it is reactivated. This is useful for pausing or cancelling orders that should no longer proceed without deleting the order record entirely.

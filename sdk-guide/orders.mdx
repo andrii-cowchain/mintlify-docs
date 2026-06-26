@@ -1,0 +1,384 @@
+---
+title: "Multisig Orders: Sign and Execute — Cowchain SDK"
+sidebarTitle: "Orders"
+description: "Propose, sign, execute, and reject multisig transactions across EVM, Solana, Tron, Bitcoin, Cardano, and XRP using the Cowchain order API."
+---
+
+An **order** is a proposed transaction for a multisig vault. Before any funds move, the required number of owners must sign — and only then can the order be executed on-chain. This threshold-gating is the core of non-custodial shared custody: no single key holder can unilaterally authorise a transfer. Cowchain provides a uniform order API across all supported chains, handling the chain-specific signature formats, PSBT assembly, on-chain proposal accounts, and expiry logic automatically.
+
+## Order Lifecycle
+
+Orders move through a fixed set of statuses from creation to terminal state.
+
+```
+[created] → proposed → pending → active → signed → executed ✓
+                                                   ↘ rejected ✗
+              ↓
+           deactivated ✗
+```
+
+| Status | Meaning |
+|---|---|
+| `proposed` | Order created, no signatures yet |
+| `pending` | At least one signature collected; threshold not yet met |
+| `active` | Order is open and accepting signatures |
+| `signed` | All required signatures collected; eligible for execution |
+| `executed` | Successfully broadcast and confirmed on-chain |
+| `rejected` | Enough owners rejected to make execution impossible |
+| `deactivated` | Order was deactivated before reaching execution (e.g. expired or invalidated) |
+| `failed` | Execution was attempted but the on-chain transaction reverted |
+
+## Order Types
+
+| Method | Description |
+|---|---|
+| `native` | Send native currency (ETH, SOL, TRX, BTC, ADA, XRP) |
+| `erc20` / `spl` / `trc20` | Send a fungible token on EVM / Solana / Tron |
+| `addOwner` | Add a new owner to the multisig |
+| `removeOwner` | Remove an existing owner |
+| `changeThreshold` | Update the signing threshold |
+
+## Prerequisites
+
+Orders require an unlocked wallet session. Obtain a `userRef` and call `unlockWalletSession` before signing or executing any order. You only need `userRef` for operations that access key material (sign, execute, reject).
+
+```typescript
+const userRef = await sdk.getSdkUserId();
+await sdk.unlockWalletSession(userRef, password);
+```
+
+Pass `walletScope: 'organization'` on all calls if the vault is an organisation vault.
+
+## Creating Orders
+
+### Generic `createOrder`
+
+Use `createOrder` for full control over the instruction payload. It works on all chains.
+
+<CodeGroup>
+
+```typescript Send Native Currency
+const { order } = await sdk.createOrder({
+  chain: 'EVM',
+  multisigId: multisig.id,
+  walletAddress: myWalletAddress,
+  method: 'native',
+  instructions: [
+    {
+      to: recipientAddress,
+      amount: '0.5', // ETH (human-readable, not wei)
+    },
+  ],
+  walletScope: 'personal', // or 'organization'
+});
+
+console.log('Order created:', order.id);
+console.log('Status:', order.status); // 'proposed'
+```
+
+```typescript Send ERC-20 Token
+const { order } = await sdk.createOrder({
+  chain: 'EVM',
+  multisigId: multisig.id,
+  walletAddress: myWalletAddress,
+  method: 'erc20',
+  instructions: [
+    {
+      to: recipientAddress,
+      amount: '100',
+      tokenAddress: '0xA0b8...', // token contract
+      decimals: 6,
+    },
+  ],
+  token: {
+    address: '0xA0b8...',
+    symbol: 'USDC',
+    decimals: 6,
+  },
+  walletScope: 'personal',
+});
+```
+
+</CodeGroup>
+
+### Simplified `createSendOrder`
+
+For straightforward native-or-token transfers, `createSendOrder` reduces boilerplate. Omit `token` to send the chain's native currency.
+
+```typescript
+const order = await sdk.createSendOrder({
+  multisigId: multisig.id,
+  walletAddress: myWalletAddress,
+  to: recipientAddress,
+  amount: '0.5',
+  chainId: '1', // Ethereum mainnet (EVM chain ID as string)
+  // token: { address: '0xA0b8...', symbol: 'USDC', decimals: 6 } — optional
+});
+```
+
+### Settings Orders
+
+Owner and threshold changes go through the same order lifecycle. Use `createSettingsOrder` and pass the complete new owner list.
+
+```typescript
+// Add an owner
+const { order } = await sdk.createSettingsOrder({
+  multisigId: multisig.id,
+  multisig: multisig,
+  walletAddress: myWalletAddress,
+  newOwners: [
+    ...multisig.owners.map(o => o.walletAddress),
+    '0x4444...', // new owner address
+  ],
+});
+
+// Change threshold only (keep current owners)
+const { order } = await sdk.createSettingsOrder({
+  multisigId: multisig.id,
+  multisig: multisig,
+  walletAddress: myWalletAddress,
+  newOwners: multisig.owners.map(o => o.walletAddress),
+  newThreshold: 3,
+});
+```
+
+## Signing Orders
+
+Each owner calls `signOrder` independently. The SDK fetches the appropriate key share and produces the chain-specific signature format (EIP-712, PSBT partial sig, on-chain Squads proposal, etc.).
+
+```typescript
+const result = await sdk.signOrder({
+  chain: EChainType.EVM,
+  orderId: order.id,
+  walletAddress: myWalletAddress,
+  multisigId: multisig.id,
+  userRef,
+});
+
+console.log('Signatures collected:', result.order.signatures.length);
+console.log('Threshold required:', multisig.threshold);
+
+if (result.order.signatures.length >= parseInt(multisig.threshold)) {
+  console.log('Order is ready to execute!');
+}
+```
+
+## Executing Orders
+
+Once an order reaches `signed` status (threshold met), any authorised owner can execute it. For EVM, the executor's wallet pays gas. For other chains, fees come from the multisig balance — see [Network Fees](/sdk-guide/multisig-fees).
+
+### Estimate Fees First
+
+<Note>
+  `estimateOrderExecutionFee` currently returns a placeholder value of **0.001**. Use it to pass a `feeQuote` to `executeOrder`, but always verify the actual on-chain cost before presenting it to end users.
+</Note>
+
+```typescript
+const fee = await sdk.estimateOrderExecutionFee({
+  chain: 'EVM',
+  orderId: order.id,
+  walletAddress: myWalletAddress,
+  chainId: '1', // ChainIdValue as string
+});
+
+console.log(`Estimated fee: ${fee.estimatedFee} ${fee.currency}`);
+```
+
+### Execute
+
+```typescript
+const result = await sdk.executeOrder({
+  chain: EChainType.EVM,
+  orderId: order.id,
+  multisigId: multisig.id,
+  walletAddress: myWalletAddress,
+  userRef,
+});
+
+console.log('Transaction hash:', result.txHash);
+console.log('Status:', result.order.status); // 'executed'
+```
+
+## Rejecting Orders
+
+An owner who does not approve an order should call `rejectOrder`. If enough owners reject (typically `owners.length - threshold + 1`), the order transitions to `rejected` and can no longer be executed.
+
+```typescript
+const result = await sdk.rejectOrder({
+  chain: EChainType.EVM,
+  orderId: order.id,
+  multisigId: multisig.id,
+  walletAddress: myWalletAddress,
+  userRef,
+});
+
+console.log('Order status:', result.status); // 'rejected' once rejection threshold met
+```
+
+<Info>
+  The rejection threshold is typically calculated as `owners.length - threshold + 1`. For a 2-of-3 multisig, a single rejection is enough to permanently block execution.
+</Info>
+
+## Querying Orders
+
+### List Orders for a Multisig
+
+```typescript
+const { orders } = await sdk.getOrders({
+  multisigId: multisig.id,
+  page: 1,
+  limit: 20,
+});
+
+orders.forEach(order => {
+  console.log(`${order.id}: ${order.method} — ${order.status}`);
+});
+```
+
+### Get a Single Order by ID
+
+```typescript
+const { order } = await sdk.getOrder({
+  orderId: 'uuid',
+});
+
+// Example shape:
+// {
+//   id: 'uuid',
+//   multisigId: 'multisig-uuid',
+//   method: 'native',
+//   status: 'pending',
+//   walletInitiator: '0x1111...',
+//   signatures: [{ walletAddress: '0x1111...', signedHash: '...' }],
+//   txHash: null
+// }
+console.log(order);
+```
+
+## End-to-End Flow
+
+The following example shows a complete 2-of-3 EVM order from creation through execution.
+
+```typescript
+import { EChainType } from 'vaults-multichain-sdk';
+
+// Assume multisig is a previously activated 2-of-3 EVM Safe
+// and both owners have unlocked sessions.
+
+// Step 1 — Create the order
+const { order: createdOrder } = await sdk.createOrder({
+  chain: 'EVM',
+  multisigId: multisig.id,
+  walletAddress: owner1Address,
+  method: 'native',
+  instructions: [{ to: recipient, amount: '1.0' }],
+  walletScope: 'personal',
+});
+// status: 'proposed'
+
+// Step 2 — Owner 1 signs
+const { order: signed1 } = await sdk.signOrder({
+  chain: 'EVM',
+  orderId: createdOrder.id,
+  walletAddress: owner1Address,
+  multisigId: multisig.id,
+  userRef: userRef1,
+});
+// status: 'pending' (1 of 2 signatures)
+
+// Step 3 — Owner 2 signs
+const { order: signed2 } = await sdk.signOrder({
+  chain: 'EVM',
+  orderId: createdOrder.id,
+  walletAddress: owner2Address,
+  multisigId: multisig.id,
+  userRef: userRef2,
+});
+// status: 'signed' (2 of 2 signatures)
+
+// Step 4 — Estimate fee (optional but recommended)
+const fee = await sdk.estimateOrderExecutionFee({
+  chain: 'EVM',
+  orderId: signed2.id,
+  walletAddress: owner2Address,
+  chainId: '1',
+});
+console.log(`Fee: ${fee.estimatedFee} ${fee.currency}`);
+
+// Step 5 — Execute
+if (signed2.signatures.length >= parseInt(multisig.threshold)) {
+  const executed = await sdk.executeOrder({
+    chain: 'EVM',
+    orderId: signed2.id,
+    multisigId: multisig.id,
+    walletAddress: owner2Address,
+    userRef: userRef2,
+  });
+
+  console.log('Done! TX hash:', executed.txHash);
+  // status: 'executed'
+}
+```
+
+## Chain-Specific Notes
+
+<AccordionGroup>
+
+  <Accordion title="EVM — Gnosis Safe">
+    - Orders produce a Safe transaction hash using EIP-712 typed data.
+    - Signing is fully off-chain; no gas is consumed until `executeOrder`.
+    - Any owner (or even a third-party relayer with the signed payload) can call `executeOrder` once the threshold is met.
+    - The executor's personal wallet pays gas — not the Safe's balance.
+    - No order expiration; orders remain valid indefinitely.
+  </Accordion>
+
+  <Accordion title="Solana — Squads V4">
+    - Orders map to Squads Multisig proposal accounts, each with a unique transaction index.
+    - Both creating and signing a proposal submit on-chain transactions. The signing owner pays the base Solana fee (~0.000005 SOL) for each action.
+    - Orders auto-activate on creation (the proposal PDA is created immediately).
+    - Executing a **settings order** invalidates all other pending orders — plan threshold changes carefully.
+  </Accordion>
+
+  <Accordion title="Bitcoin — P2WSH">
+    - Orders generate a PSBT (Partially Signed Bitcoin Transaction).
+    - Each `signOrder` call adds a partial signature to the PSBT — still fully off-chain.
+    - Once threshold signatures are present, `executeOrder` finalises and broadcasts the transaction.
+    - Network fees are deducted from the multisig UTXOs; the fee rate is baked in at order creation time.
+    - Owner configuration is immutable — settings orders are not available.
+  </Accordion>
+
+  <Accordion title="Tron — Native Multisig">
+    - Signing is off-chain; signatures are collected and assembled before broadcast.
+    - `executeOrder` broadcasts the fully signed transaction to the Tron network.
+    - Execution fees come from the multisig wallet balance (not the executor).
+    - Settings update orders incur an additional fixed **100 TRX** network fee.
+    - **Orders expire 23 hours 50 minutes** after the first signature. Monitor expiry and recreate if needed.
+  </Accordion>
+
+  <Accordion title="Cardano — Native Scripts">
+    - Signing produces witnesses collected off-chain; no fee until execution.
+    - Orders carry a 72-hour TTL; expired orders cannot be executed.
+    - The EUTXO model means UTXOs used in pending orders are reserved and cannot be double-spent.
+    - Each transaction output must contain at least **1 ADA**.
+    - Execution fees (0.2–0.4 ADA) come from the multisig balance.
+  </Accordion>
+
+  <Accordion title="XRP — SignerList">
+    - Signing is off-chain; signatures are collected before assembling the final transaction.
+    - Orders expire after **24 hours** based on ledger sequence.
+    - XRP Ledger processes orders sequentially — parallel pending orders are not supported.
+    - The multisig fee formula is `(1 + numberOfSignatures) × 10 drops`. The multisig balance pays.
+  </Accordion>
+
+</AccordionGroup>
+
+## Related Pages
+
+<CardGroup cols={2}>
+  <Card title="Multisig Vaults" icon="users" href="/sdk-guide/multisig">
+    Set up vaults, manage owners, and handle chain-specific activation.
+  </Card>
+  <Card title="Network Fees" icon="coins" href="/sdk-guide/multisig-fees">
+    Understand fee payers and cost estimates for every on-chain action.
+  </Card>
+</CardGroup>

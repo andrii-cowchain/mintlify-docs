@@ -1,0 +1,8 @@
+---
+title: "Get an Unsigned Solana Multisig Deployment Transaction"
+sidebarTitle: "Get Deploy Transaction"
+description: "POST /sdk/multisig/sol/tx/deploy — Retrieve an unsigned Solana multisig deployment transaction ready to be signed and submitted by the creator's wallet."
+openapi: post /sdk/multisig/sol/tx/deploy
+---
+
+Retrieve an unsigned Solana multisig deployment transaction. Submit the required multisig configuration in the request body; the response returns a serialised transaction that the creator's wallet must sign before submitting to the network via the deploy endpoint.

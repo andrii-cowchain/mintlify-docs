@@ -1,0 +1,8 @@
+---
+openapi: get /sdk/wallets/{walletAddress}
+title: "Retrieve a Single Wallet by Its Blockchain Address"
+sidebarTitle: "Get Wallet"
+description: "GET /sdk/wallets/{walletAddress} - Fetches details for a wallet by its on-chain address, including chain type, display name, and key-share metadata."
+---
+
+Retrieve detailed information for a single wallet using its blockchain address. The `walletAddress` path parameter must be the full on-chain address of the wallet. The response includes the wallet's chain type, display name, creation timestamp, and associated key-share metadata.
